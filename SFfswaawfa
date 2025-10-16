@@ -959,7 +959,7 @@ task.spawn(function()
     end
 end)
 
-
+print("✅ GUI โหลดเสร็จแล้ว!")
 
 -- ===============================================
 -- ฟังก์ชันสำหรับ Toggle GUI (เพิ่มใหม่)
@@ -1079,7 +1079,7 @@ function Loader:Enable()
         if type(ret) == "function" then
             self.cleanup = ret   -- ถ้าปลายทางให้ cleanup จะได้เรียกตอนปิด
         end
-      
+        print("✅ Remote enabled")
     end)
 end
 
@@ -2667,38 +2667,24 @@ end
 
 
 Window:Line()
+-- === Aimbot (Head Lock) + Auto-Reload ===
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
 
 local Aimbot = Window:Tab({Title = "ล็อคเป้า", Icon = "user"}) do
     Aimbot:Section({Title = "โหมดล็อคหัวออโต้"})
 
-    local AimbotSettings = {
-        Enabled = false,
-        Range = 50
-    }
+    -- ================= Base Settings =================
+    local AimbotSettings = { Enabled = false, Range = 50 }
 
-    -- 🔘 Toggle เปิด/ปิด Aimbot
-    Aimbot:Toggle({
-        Title = "เปิด ล็อคหัว ใช้ได้กับหลายปืน",
-        Desc = "",
-        Value = false,
-        Callback = function(v)
-            AimbotSettings.Enabled = v
-            if v then
-                print("Aimbot Enabled - Range: " .. AimbotSettings.Range)
-            else
-                print("Aimbot Disabled")
-            end
-        end
-    })
-
-    ----------------------------------------------------------------
-    -- 📦 ปืนที่รองรับ
-    ----------------------------------------------------------------
     local POSSIBLE_GUN_NAMES = {
-        "AK", "AUG", "Barret", "Desert Eagle", "Glock", "M4", "MP5",
-        "Police Glock", "Police MP5", "Scar", "Shotgun", "Sniper Rifle",
-        "Spas Shotgun", "Taser", "Uzi"
+        "AK","AUG","Barret","Desert Eagle","Glock","M4","MP5",
+        "Police Glock","Police MP5","Scar","Shotgun","Sniper Rifle",
+        "Spas Shotgun","Taser","Uzi"
     }
+    local REMOTE_NAME_CANDIDATES = { "ShootEvent","Shoot","Fire","FireEvent" }
 
     local function nameMatchesAny(name, list)
         if not name or name == "" then return false end
@@ -2711,185 +2697,258 @@ local Aimbot = Window:Tab({Title = "ล็อคเป้า", Icon = "user"}) d
         return false
     end
 
-    local function getEquippedWeapon(character)
-        if not character then return nil end
-        for _, child in ipairs(character:GetChildren()) do
-            if nameMatchesAny(child.Name, POSSIBLE_GUN_NAMES) then
-                local se = child:FindFirstChild("ShootEvent", true)
-                if se then return child, se end
-            end
-        end
-        for _, descendant in ipairs(character:GetDescendants()) do
-            if descendant:IsA("RemoteEvent") and descendant.Name == "ShootEvent" then
-                return descendant.Parent, descendant
-            end
-        end
-        return nil, nil
-    end
+    local function isMedic(_char) return false end
 
-    ----------------------------------------------------------------
-    -- 🔫 ยิงใส่เป้าหมาย
-    ----------------------------------------------------------------
-    local function shootAtTarget(targetPlayer)
-        local Players = game:GetService("Players")
-        local localPlayer = Players.LocalPlayer
-
-        if not targetPlayer or not targetPlayer.Character then return false end
-
-        -- ✅ เช็คว่าเป้าหมายมีหัว
-        local head = targetPlayer.Character:FindFirstChild("Head")
+    local function isPvpOn(char)
+        local head = char and char:FindFirstChild("Head")
         if not head then return false end
-
-        -- ✅ เช็คว่าเป้าหมายเปิด PVP อยู่ไหม
-        local nametag = head:FindFirstChild("NameTag")
-        if nametag then
-            local pvp = nametag:FindFirstChild("PVP ON")
-            if pvp and (not pvp.Visible and not pvp.Enabled) then
-                return false -- PVP ปิด
-            end
-        end
-
-        -- ✅ เช็คว่าเป้าหมายยังมีเลือดอยู่
-        local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            return false
-        end
-
-        -- ✅ ยิง
-        local character = localPlayer.Character
-        if not character then return false end
-
-        local weapon, shootEvent = getEquippedWeapon(character)
-        if not weapon then return false end
-
-        if shootEvent and shootEvent:IsA("RemoteEvent") then
-            shootEvent:FireServer(head.Position)
-
-            return true
-        end
-
-        return false
+        local tag = head:FindFirstChild("NameTag")
+        if not tag then return true end
+        local node = tag:FindFirstChild("PVP ON") or tag:FindFirstChild("PVPRaw") or tag:FindFirstChild("PVP") or tag:FindFirstChild("PVPON")
+        if not node then return true end
+        local ok = false
+        pcall(function()
+            ok = (node.Visible == true) or (node.Enabled == true)
+        end)
+        return ok
     end
 
-    ----------------------------------------------------------------
-    -- 🎯 หาผู้เล่นที่ใกล้ที่สุด
-    ----------------------------------------------------------------
-local function getDistance(pos1, pos2)
-    return (pos1 - pos2).Magnitude
-end
+    local function getWeaponAndRemote()
+        local char = LocalPlayer.Character
+        if not char then return nil, nil end
 
-local function findNearestTarget()
-    local Players = game:GetService("Players")
-    local localPlayer = Players.LocalPlayer
-    local character = localPlayer.Character
-    if not character then return nil end
-
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return nil end
-
-    local nearest = nil
-    local minDist = AimbotSettings.Range
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character then
-            local enemyChar = player.Character
-
-            -- ข้ามหมอเลย (ไม่ใช้ goto/continue)
-            if not isMedic(enemyChar) then
-                local enemyRoot     = enemyChar:FindFirstChild("HumanoidRootPart")
-                local enemyHumanoid = enemyChar:FindFirstChildOfClass("Humanoid")
-                local enemyHead     = enemyChar:FindFirstChild("Head")
-
-                if enemyHumanoid and enemyHumanoid.Health > 0 and enemyRoot and enemyHead then
-                    local dist = getDistance(root.Position, enemyRoot.Position)
-                    if dist <= minDist then
-                        -- ต้อง PVP ON
-                        local nametag = enemyHead:FindFirstChild("NameTag")
-                        local pvp = nametag and nametag:FindFirstChild("PVP ON")
-                        if pvp and (pvp.Visible or pvp.Enabled) then
-                            minDist = dist
-                            nearest = player
+        -- 1) ใน Character (equip แล้ว)
+        for _, child in ipairs(char:GetChildren()) do
+            if nameMatchesAny(child.Name, POSSIBLE_GUN_NAMES) then
+                for _, cand in ipairs(REMOTE_NAME_CANDIDATES) do
+                    local ev = child:FindFirstChild(cand, true)
+                    if ev and ev:IsA("RemoteEvent") then
+                        return child, ev
+                    end
+                end
+            end
+        end
+        -- 2) ค้นลึก
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("RemoteEvent") and table.find(REMOTE_NAME_CANDIDATES, d.Name) then
+                return d.Parent, d
+            end
+        end
+        -- 3) ใน Backpack
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if bp then
+            for _, tool in ipairs(bp:GetChildren()) do
+                if nameMatchesAny(tool.Name, POSSIBLE_GUN_NAMES) then
+                    for _, cand in ipairs(REMOTE_NAME_CANDIDATES) do
+                        local ev = tool:FindFirstChild(cand, true)
+                        if ev and ev:IsA("RemoteEvent") then
+                            return tool, ev
                         end
                     end
                 end
             end
         end
+        return nil, nil
     end
 
-    return nearest
-end
+    local function distance(a, b) return (a - b).Magnitude end
 
-    ----------------------------------------------------------------
-    -- ♻️ Aimbot Loop
-    ----------------------------------------------------------------
-    local function autoAim()
-        local target = findNearestTarget()
-        if target then
-            shootAtTarget(target)
+    local function findNearestTarget()
+        local char = LocalPlayer.Character
+        if not char then return nil end
+        local myRoot = char:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return nil end
+
+        local nearest, minDist = nil, AimbotSettings.Range
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character and not isMedic(plr.Character) then
+                local eChar = plr.Character
+                local eRoot = eChar:FindFirstChild("HumanoidRootPart")
+                local eHum  = eChar:FindFirstChildOfClass("Humanoid")
+                local eHead = eChar:FindFirstChild("Head")
+                if eRoot and eHum and eHead and eHum.Health > 0 and isPvpOn(eChar) then
+                    local d = distance(myRoot.Position, eRoot.Position)
+                    if d <= minDist then
+                        minDist = d
+                        nearest = plr
+                    end
+                end
+            end
         end
+        return nearest
     end
 
-    local aimbotConnection
-    local function startAimbot()
-        local RunService = game:GetService("RunService")
-        if aimbotConnection then
-            aimbotConnection:Disconnect()
+    local function shootHead(targetPlayer)
+        if not targetPlayer or not targetPlayer.Character then return false end
+        local head = targetPlayer.Character:FindFirstChild("Head")
+        local hum  = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if not head or not hum or hum.Health <= 0 then return false end
+        local _, remote = getWeaponAndRemote()
+        if not remote then return false end
+        local ok, err = pcall(function()
+            remote:FireServer(head.Position)
+        end)
+        if not ok then warn("[Aimbot] FireServer failed:", err) return false end
+        return true
+    end
+
+    -- ================= Auto-Reload =================
+    local AutoReload = {
+        Enabled = false,
+        PressKeyFallback = Enum.KeyCode.R, -- fallback ถ้าไม่พบรีโมต reload
+        ScanInterval = 0.1
+    }
+    local reloadConn
+
+    -- เส้นทางอ่านกระสุนที่เจอบ่อย
+    local AMMO_CANDIDATES = {
+        {"Configuration","CurrentAmmo"},
+        {"Configuration","AmmoInClip"},
+        {"Configuration","Ammo"},
+        {"Ammo"},
+        {"ClipAmmo"},
+        {"MagAmmo"}
+    }
+    local MAX_AMMO_CANDIDATES = {
+        {"Configuration","MaxAmmo"},
+        {"MaxAmmo"},
+        {"AmmoMax"}
+    }
+
+    local function findValueByPath(root, pathTbl)
+        local node = root
+        for _, seg in ipairs(pathTbl) do
+            node = node and node:FindFirstChild(seg)
         end
-        aimbotConnection = RunService.Heartbeat:Connect(function()
-            if AimbotSettings.Enabled then
-                autoAim()
+        if node and node.Value ~= nil then return node end
+        return nil
+    end
+
+    local function getAmmoInfo(tool)
+        if not tool then return nil, nil end
+        local cur, max = nil, nil
+        for _, p in ipairs(AMMO_CANDIDATES) do
+            local v = findValueByPath(tool, p)
+            if v then cur = tonumber(v.Value) break end
+        end
+        for _, p in ipairs(MAX_AMMO_CANDIDATES) do
+            local v = findValueByPath(tool, p)
+            if v then max = tonumber(v.Value) break end
+        end
+        -- เผื่อบางเกมใช้ Attribute
+        if cur == nil then
+            local ok, val = pcall(function() return tool:GetAttribute("Ammo") end)
+            if ok and typeof(val) == "number" then cur = val end
+        end
+        return cur, max
+    end
+
+    local function tryReload(tool)
+        if not tool then return false end
+        -- หา Remote ที่เกี่ยวกับ reload
+        local candidates = {
+            "Reload","ReloadEvent","ReloadStart","ServerReload","StartReload","BeginReload",
+            "Input","Action" -- บางเกมรวม input ไว้ remote เดียว ต้องส่งสตริง
+        }
+        local fired = false
+        -- ลอง FireServer แบบต่าง ๆ
+        for _, name in ipairs(candidates) do
+            local ev = tool:FindFirstChild(name, true)
+            if ev and ev:IsA("RemoteEvent") then
+                local ok = pcall(function() ev:FireServer() end);     if ok then fired = true break end
+                ok = pcall(function() ev:FireServer("Reload") end);    if ok then fired = true break end
+                ok = pcall(function() ev:FireServer(true) end);        if ok then fired = true break end
+                ok = pcall(function() ev:FireServer({action="Reload"}) end); if ok then fired = true break end
+            end
+        end
+        if fired then return true end
+
+        -- Fallback: จำลองกดปุ่ม R
+        local ok = pcall(function()
+            local vim = game:GetService("VirtualInputManager")
+            vim:SendKeyEvent(true, AutoReload.PressKeyFallback, false, game)
+            task.wait(0.05)
+            vim:SendKeyEvent(false, AutoReload.PressKeyFallback, false, game)
+        end)
+        return ok
+    end
+
+    local function startAutoReload()
+        if reloadConn then reloadConn:Disconnect() end
+        reloadConn = RunService.Heartbeat:Connect(function()
+            if not AutoReload.Enabled then return end
+            local tool = getWeaponAndRemote()
+            if type(tool) == "table" then tool = tool[1] end -- เผื่อไม่ได้ unpack
+            local current, _ = getAmmoInfo(tool)
+            if current ~= nil and tonumber(current) ~= nil and tonumber(current) <= 0 then
+                local ok = tryReload(tool)
+                if ok then
+                    -- กันสแปม: หน่วงสั้น ๆ หลังรีโหลด
+                    task.wait(0.25)
+                end
             end
         end)
     end
+    local function stopAutoReload()
+        if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
+    end
 
-    startAimbot()
+    -- ================= Loops / UI =================
+    local hbConn
+    local function startAimbot()
+        if hbConn then hbConn:Disconnect() end
+        hbConn = RunService.Heartbeat:Connect(function()
+            if not AimbotSettings.Enabled then return end
+            local target = findNearestTarget()
+            if target then shootHead(target) end
+        end)
+    end
+    local function stopAimbot()
+        if hbConn then hbConn:Disconnect(); hbConn = nil end
+    end
 
-    local Players = game:GetService("Players")
-    local localPlayer = Players.LocalPlayer
-    localPlayer.CharacterAdded:Connect(function()
-     
-        task.wait(2)
-        startAimbot()
+    Aimbot:Toggle({
+        Title = "เปิด ล็อคหัว (หลายปืน)",
+        Value = false,
+        Callback = function(v)
+            AimbotSettings.Enabled = v
+            if v then startAimbot() else stopAimbot() end
+        end
+    })
+
+    Aimbot:Slider({
+        Title = "ปรับระยะล็อคหัว",
+        Min = 10, Max = 200, Rounding = 0, Value = 50,
+        Callback = function(val) AimbotSettings.Range = val end
+    })
+
+    -- 🔄 รีโหลดออโต้ (เฉพาะตอนกระสุนหมด)
+    Aimbot:Toggle({
+        Title = "รีโหลดออโต้",
+        Desc  = "จะรีโหลดเมื่อกระสุนในแม็กเป็น 0 เท่านั้น",
+        Value = false,
+        Callback = function(v)
+            AutoReload.Enabled = v
+            if v then startAutoReload() else stopAutoReload() end
+        end
+    })
+
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(1.2)
+        if AimbotSettings.Enabled then startAimbot() end
+        if AutoReload.Enabled then startAutoReload() end
     end)
 
-    local UserInputService = game:GetService("UserInputService")
+    -- ปุ่มหยุดฉุกเฉิน
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == Enum.KeyCode.Backspace then
             AimbotSettings.Enabled = false
-         
+            stopAimbot()
+            print("Aimbot: emergency stop")
         end
     end)
-
-   
 end
-
--- 🔄 รีโหลดออโต้
-Aimbot:Toggle({
-    Title = "รีโหลดออโต้",
-    Desc = "จะรีโหลดเฉพาะตอนกระสุนหมด",
-    Value = false,
-    Callback = function(v)
-        isFiring = v
-        if v then
-            startFiring()
-        end
-    end
-})
-
--- 🎚️ ปรับระยะล็อคหัว
-Aimbot:Slider({
-    Title = "ปรับระยะล็อคหัว",
-    Min = 10,
-    Max = 200,
-    Rounding = 0,
-    Value = 50,
-    Callback = function(val)
-        AimbotSettings.Range = val
-        print("Aimbot Range set to: " .. val)
-    end
-})
-
 
 Window:Line()
 
