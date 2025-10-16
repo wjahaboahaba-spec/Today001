@@ -1,3 +1,5 @@
+
+
 local Library = loadstring(
     game:HttpGet(
         'https://raw.githubusercontent.com/x2zu/OPEN-SOURCE-UI-ROBLOX/refs/heads/main/X2ZU%20UI%20ROBLOX%20OPEN%20SOURCE/DummyUi-leak-by-x2zu/fetching-main/Tools/Framework.luau'
@@ -118,7 +120,173 @@ Tab:Toggle({
 	end
 })
 
+--[[ 
+  Halloween Gems — Auto Collect (with Live Rescan + Toggle)
+  - สแกน workspace["Halloween Gems"] ทั้งหมดแบบ recursive
+  - อัปเดตรายการเป้าเรื่อย ๆ (rescan loop)
+  - รองรับทั้ง ProximityPrompt และ Touch
+  - ผูกกับ Toggle: เปิด = ทำงาน, ปิด = หยุด
+]]
 
+-- ========= CONFIG =========
+local CONTAINER_NAME = "Halloween Gems"
+local TELEPORT_OFFSET = Vector3.new(0, 4, 0)    -- ยกตัวเหนือเป้าเล็กน้อย
+local TP_SETTLE      = 0.15                     -- รอหลังวาร์ป
+local COLLECT_WAIT   = 0.25                     -- เว้นจังหวะหลังเก็บ
+local RESCAN_DELAY   = 1.0                      -- หน่วงเวลาระหว่างรอบสแกน
+
+getgenv().HALLOWEEN_GEMS_RUNNING = false
+
+-- ========= Services =========
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- ========= Helpers =========
+local function getHRP()
+    local c = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return c:FindFirstChild("HumanoidRootPart")
+end
+
+local function anyBasePart(obj)
+    if obj:IsA("BasePart") then return obj end
+    for _, d in ipairs(obj:GetDescendants()) do
+        if d:IsA("BasePart") then return d end
+    end
+    return nil
+end
+
+-- เก็บรายการที่ “ยังไม่ได้เก็บ” ไว้ยิงต่อ ไม่ยิงซ้ำชิ้นเดิม
+local collectedMark = setmetatable({}, {__mode = "k"}) -- weak keys
+
+local function findTargets(rootFolder)
+    local targets, seen = {}, {}
+    for _, d in ipairs(rootFolder:GetDescendants()) do
+        -- 1) ProximityPrompt
+        if d:IsA("ProximityPrompt") then
+            local part = anyBasePart(d.Parent)
+            if part and not seen[part] and not collectedMark[part] then
+                table.insert(targets, {part = part, prompt = d})
+                seen[part] = true
+            end
+        -- 2) Touchable part
+        elseif d:IsA("BasePart") and (d:FindFirstChildOfClass("TouchTransmitter") or d:FindFirstChild("TouchInterest")) then
+            if not seen[d] and not collectedMark[d] then
+                table.insert(targets, {part = d})
+                seen[d] = true
+            end
+        -- 3) เผื่อบางเกมตั้งชื่อพาร์ตว่า “Gem”
+        elseif d:IsA("BasePart") and d.Name:lower():find("gem") then
+            if not seen[d] and not collectedMark[d] then
+                table.insert(targets, {part = d})
+                seen[d] = true
+            end
+        end
+    end
+    return targets
+end
+
+local function safeTeleport(cf)
+    local hrp = getHRP()
+    if not hrp then return false, "No HRP" end
+    hrp.CFrame = cf
+    task.wait(TP_SETTLE)
+    return true
+end
+
+local function collectOne(t)
+    local hrp = getHRP()
+    if not hrp then return false, "No HRP" end
+    local part = t.part
+    if not part or not part:IsDescendantOf(workspace) then
+        return false, "Part missing"
+    end
+
+    local ok = safeTeleport(CFrame.new(part.Position + TELEPORT_OFFSET))
+    if not ok then return false, "Teleport failed" end
+
+    -- ProximityPrompt
+    if t.prompt and typeof(fireproximityprompt) == "function" then
+        pcall(fireproximityprompt, t.prompt, 1)
+    end
+
+    -- Touch fallback/เสริม
+    if typeof(firetouchinterest) == "function" then
+        pcall(firetouchinterest, hrp, part, 0)
+        task.wait(0.08)
+        pcall(firetouchinterest, hrp, part, 1)
+    end
+
+    task.wait(COLLECT_WAIT)
+    collectedMark[part] = true -- กันยิงซ้ำ
+    return true
+end
+
+-- ========= Main Loop (rescan ตลอด) =========
+local _collectorThread
+
+local function CollectorLoop()
+    while getgenv().HALLOWEEN_GEMS_RUNNING do
+        local container = workspace:FindFirstChild(CONTAINER_NAME)
+        if not container then
+            warn("❌ ไม่พบโฟลเดอร์:", CONTAINER_NAME)
+            break
+        end
+
+        local targets = findTargets(container)
+        if #targets > 0 then
+            print(("🎯 พบเป้าใหม่ %d ชิ้น — เริ่มเก็บ"):format(#targets))
+        end
+
+        for i, t in ipairs(targets) do
+            if not getgenv().HALLOWEEN_GEMS_RUNNING then break end
+            local ok, err = collectOne(t)
+            if ok then
+                print(("[%d/%d] ✅ %s"):format(i, #targets, t.part:GetFullName()))
+            else
+                warn(("❌ เก็บไม่สำเร็จ: %s"):format(err or "unknown"))
+            end
+        end
+
+        -- หน่วงก่อนสแกนรอบถัดไป (เพื่อเจอของที่ spawn มาใหม่)
+        task.wait(RESCAN_DELAY)
+    end
+    print("⏹️ Collector stopped.")
+end
+
+function StartCollectHalloweenGems()
+    if getgenv().HALLOWEEN_GEMS_RUNNING then return end
+    getgenv().HALLOWEEN_GEMS_RUNNING = true
+    print("▶️ Collector started (live rescan enabled).")
+    _collectorThread = task.spawn(CollectorLoop)
+end
+
+function StopCollectHalloweenGems()
+    getgenv().HALLOWEEN_GEMS_RUNNING = false
+end
+
+-- ========= UI Toggle Hook (ใส่เข้ากับ lib ของคุณ) =========
+-- แทนที่ `UI` ด้วยอ็อบเจ็กต์/เซคชันที่ใช้สร้าง Toggle ของคุณ
+-- รูปแบบฟิลด์ตรงกับที่คุณให้มา: Title/Desc/Value/Callback
+local UI = UI or {}  -- ถ้าคุณมี lib อยู่แล้ว ให้ลบทิ้งบรรทัดนี้ไป
+function UI:Toggle(def)  -- mock สำหรับรันเทส; ในงานจริงใช้ Toggle ของ lib คุณ
+    print(("🧪 [MockToggle] %s (default=%s)"):format(def.Title or "Toggle", tostring(def.Value)))
+    def.Callback(def.Value) -- auto fire ครั้งแรกตามค่า Value
+    return { Set = function(_,v) def.Callback(v) end }
+end
+
+Tab:Toggle({
+    Title = "Auto Coins [Event]",
+    Desc  = "",
+    Value = false,  -- เปิดปิดตามต้องการ
+    Callback = function(v)
+        print("Toggle:", v)
+        if v then
+            StartCollectHalloweenGems()
+        else
+            StopCollectHalloweenGems()
+        end
+    end
+})
 
     -- ✅ Spam Twitter
     local spamMessage = 'Hello!'
@@ -791,7 +959,7 @@ task.spawn(function()
     end
 end)
 
-print("✅ GUI โหลดเสร็จแล้ว!")
+
 
 -- ===============================================
 -- ฟังก์ชันสำหรับ Toggle GUI (เพิ่มใหม่)
@@ -811,6 +979,146 @@ CaptureTab:Toggle({
         ToggleGUI(v)
     end
 })
+
+
+-- ========= Remote Toggle Loader (with GUI cleanup) =========
+local URL = "https://raw.githubusercontent.com/wjahaboahaba-spec/Jaill/refs/heads/main/001dasdwasdwa"
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+
+local Loader = getgenv().NEXON_RemoteToggle or {}
+getgenv().NEXON_RemoteToggle = Loader
+
+Loader.running     = Loader.running or false
+Loader.cleanup     = nil
+Loader._stopKey    = Loader._stopKey or ("__JAILL_STOP_"..tostring(math.random(1,9e6)))
+Loader._watchConns = {}
+Loader._created    = Loader._created or setmetatable({}, {__mode="k"}) -- เก็บอินสแตนซ์ที่ถูกสร้างระหว่างเปิด (weak keys)
+
+local function getHUI()
+    local ok, ui = pcall(function() return (typeof(gethui)=="function" and gethui()) end)
+    return (ok and ui) or nil
+end
+
+local function guiRoots()
+    local roots = {}
+    local hui = getHUI()
+    if hui then table.insert(roots, hui) end
+    table.insert(roots, CoreGui)
+    local pg = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 3)
+    if pg then table.insert(roots, pg) end
+    return roots
+end
+
+local function clearConns()
+    for _,c in ipairs(Loader._watchConns) do
+        pcall(function() c:Disconnect() end)
+    end
+    table.clear(Loader._watchConns)
+end
+
+local function startWatchers()
+    clearConns()
+    -- ต่อ DescendantAdded เพื่อจับของที่ถูกสร้าง "หลัง" เปิดใช้งาน
+    for _,root in ipairs(guiRoots()) do
+        local conn = root.DescendantAdded:Connect(function(inst)
+            if Loader.running then
+                Loader._created[inst] = true
+            end
+        end)
+        table.insert(Loader._watchConns, conn)
+    end
+end
+
+local function destroyCreated()
+    local n = 0
+    for inst,_ in pairs(Loader._created) do
+        if typeof(inst)=="Instance" and inst.Parent then
+            local ok = pcall(function() inst:Destroy() end)
+            if ok then n += 1 end
+        end
+    end
+    table.clear(Loader._created)
+    return n
+end
+
+local function raiseStopFlags(v)
+    -- เผื่อสคริปต์ปลายทางเช็คชื่อธงต่างกัน
+    getgenv()[Loader._stopKey] = v
+    getgenv().JAIlL_STOP = v
+    getgenv().JAIL_STOP  = v
+    getgenv().STOP       = v
+end
+
+function Loader:Enable()
+    if self.running then return end
+    self.running = true
+    raiseStopFlags(false)
+
+    startWatchers()              -- << เริ่มจับ UI ที่ถูกสร้างตั้งแต่วินาทีนี้
+    task.delay(0, function()     -- แยกเธรดโหลด สคริปต์
+        local ok, chunk = pcall(function()
+            return loadstring(game:HttpGet(URL))
+        end)
+        if not ok or type(chunk) ~= "function" then
+            warn("❌ Load error:", chunk)
+            self.running = false
+            clearConns()
+            return
+        end
+
+        local ok2, ret = pcall(chunk)
+        if not ok2 then
+            warn("❌ Runtime error:", ret)
+            self.running = false
+            clearConns()
+            return
+        end
+        if type(ret) == "function" then
+            self.cleanup = ret   -- ถ้าปลายทางให้ cleanup จะได้เรียกตอนปิด
+        end
+      
+    end)
+end
+
+function Loader:Disable()
+    if not self.running then return end
+    self.running = false
+    raiseStopFlags(true)
+
+    -- เรียก cleanup ของปลายทางถ้ามี
+    if type(self.cleanup) == "function" then
+        pcall(self.cleanup)
+        self.cleanup = nil
+    end
+
+    -- ปิด watcher แล้วทำลาย UI ที่จับไว้ทั้งหมด
+    clearConns()
+    local removed = destroyCreated()
+
+    print(("⏹️ Remote disabled (removed %d UI instance%s)"):format(removed, removed==1 and "" or "s"))
+end
+
+-- ========= Bind เข้ากับ UI Toggle ของคุณ =========
+CaptureTab:Toggle({
+    Title = "GUI จับโจรทั้งเซิฟ",
+    Desc  = "ตำรวจเท่านั้น  ",
+    Value = false,
+    Callback = function(v)
+        print("Toggle:", v)
+        if v then
+            Loader:Enable()
+        else
+            Loader:Disable()
+        end
+    end
+})
+
+
+
+
 
 
 Window:Line()
@@ -910,14 +1218,14 @@ local function farmGrapes()
 
     while farmingEnabled do
         if isBackpackFull() then
-            warn('🎒 Backpack เต็มแล้ว! หยุดฟาร์ม.')
+           
             break
         end
 
         for _, grape in ipairs(grapeFolder:GetChildren()) do
             if not farmingEnabled then return end
             if isBackpackFull() then
-                warn('🎒 Backpack เต็มแล้ว! หยุดฟาร์ม.')
+              
                 return
             end
 
@@ -962,13 +1270,13 @@ local function sellJuice()
     local inv = player:WaitForChild('Inventory')
     local juice = inv:FindFirstChild('Grape Juice')
     if not juice then
-        warn('❌ ไม่มีน้ำองุ่นในคลัง')
+
         return
     end
 
     local amount = juice.Value
     if amount <= 0 then
-        warn('⚠️ ไม่มีน้ำองุ่นให้ขาย')
+       
         return
     end
 
@@ -977,7 +1285,7 @@ local function sellJuice()
 
     local args = { 'Grape Juice', amount }
     ReplicatedStorage:WaitForChild('Events'):WaitForChild('SellEvent'):FireServer(unpack(args))
-    warn('✅ ขายน้ำองุ่นทั้งหมดจำนวน: ' .. amount .. ' ขวดแล้ว!')
+  
 end
 
 -- 🚀 ฟังก์ชันหลักของระบบฟาร์ม (รันต่อเนื่อง)
@@ -1128,9 +1436,9 @@ local function sellSteak()
     if steak and steak.Value > 0 then
         local args = { "Steak", steak.Value }
         ReplicatedStorage:WaitForChild("Events"):WaitForChild("SellEvent"):FireServer(unpack(args))
-        warn("✅ ขาย Steak ทั้งหมดจำนวน: " .. steak.Value .. " ชิ้นแล้ว!")
+       
     else
-        warn("⚠️ ไม่มี Steak ใน Inventory")
+       
     end
 end
 
@@ -1370,14 +1678,14 @@ local function collectFruit(name, data)
     
     local HRP = Character:WaitForChild("HumanoidRootPart")
     
-    print("เริ่มฟาร์ม: " .. name)
+  
     
     -- วาร์ปไปยังตำแหน่งฟาร์ม
     local farmCFrame = CFrame.new(data.FarmPos)
     if safeTeleport(farmCFrame) then
-        print("วาร์ปไปฟาร์ม " .. name .. " สำเร็จ")
+       
     else
-        print("วาร์ปไปฟาร์ม " .. name .. " ล้มเหลว")
+      
         flags.running = false
         return
     end
@@ -1428,7 +1736,7 @@ equipOrRequestTool(data.ToolName or "Basket")
                             fireproximityprompt(prompt)
                             task.wait(0.1)
                         end
-                        print("เก็บผลไม้ " .. name .. " สำเร็จ")
+                
                     end
                 end
                 task.wait(0.3)
@@ -1437,14 +1745,14 @@ equipOrRequestTool(data.ToolName or "Basket")
 
         -- ถ้าไม่พบผลไม้ให้รอสักครู่ก่อนค้นหาใหม่
         if not foundFruit then
-            print("ไม่พบผลไม้ " .. name .. " รอค้นหาใหม่...")
+          
             task.wait(3)
         else
             task.wait(1)
         end
     end
 
-    print("หยุดฟาร์ม: " .. name)
+
     flags.running = false
 end
 
@@ -1655,7 +1963,7 @@ local function prepareKnife()
 	local buyRemote = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("BuyItemEvent")
 	if buyRemote then
 		buyRemote:FireServer("Butcher knife")
-		print("🛒 ซื้อ Butcher knife สำเร็จ")
+
 	end
 
 	local basket = LocalPlayer:WaitForChild("Backpack"):FindFirstChild("Butcher knife")
@@ -1666,7 +1974,7 @@ local function prepareKnife()
 	local invRemote = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("InventoryEvent")
 	if invRemote then
 		invRemote:FireServer("Use", "Butcher knife")
-		print("🧰 ใช้งาน Butcher knife")
+
 	end
 end
 
@@ -1676,7 +1984,7 @@ local stopRequested = false
 local function checkAndProcessMeat()
 	local inventory = LocalPlayer:FindFirstChild("Inventory")
 	if inventory and inventory:FindFirstChild("Meat") and inventory.Meat.Value >= 1 then
-		print("🍗 พบ Meat ในตัว:", inventory.Meat.Value)
+	
 
 		-- วาร์ปไปจุดแปรรูป
 		root.CFrame = CFrame.new(-1441, 17, -91)
@@ -1689,7 +1997,7 @@ local function checkAndProcessMeat()
 		}
 		local craft = ReplicatedStorage:WaitForChild("Events"):WaitForChild("CraftEvent")
 		craft:FireServer(unpack(args))
-		print("🔧 แปรรูป Meat เรียบร้อย")
+
 
 		task.wait(1)
 
@@ -1705,7 +2013,7 @@ local function farmCowsOnce()
 
 	for _, cow in ipairs(cowFolder:GetChildren()) do
 		if stopRequested then
-			print("🛑 หยุดฟาร์มวัว")
+			
 			return
 		end
 
@@ -1720,20 +2028,20 @@ local function farmCowsOnce()
 			pressE()
 
 			remote:FireServer(cube)
-			print("💥 ฆ่าวัว:", cow.Name)
+		
 
 			task.wait(2)
 
 			local craft = ReplicatedStorage.Events:FindFirstChild("CraftEvent")
 			if craft then
 				craft:FireServer("Craft_Farm", "Meat", 1)
-				print("🍖 แปรรูป Meat")
+				
 			end
 
 			local sell = ReplicatedStorage.Events:FindFirstChild("SellEvent")
 			if sell then
 				sell:FireServer("Steak", 1)
-				print("💸 ขาย Steak")
+			
 			end
 
 			label.Text = "เงินเพิ่ม: +1 Steak"
@@ -1758,7 +2066,7 @@ FoodsAll:Toggle({
     Callback = function(state)
         running = state
         stopRequested = not state
-        print("📍 สถานะ AutoFarm:", running and "เริ่มทำงาน" or "หยุดทำงาน")
+   
 
         if running then
             root.CFrame = CFrame.new(-1432, 17, -157)
@@ -2179,7 +2487,7 @@ Player:Dropdown({
     Value = SelectedFood,
     Callback = function(value)
         SelectedFood = value
-        print("🍔 เลือกอาหาร:", SelectedFood)
+     
     end
 })
 
@@ -2190,7 +2498,7 @@ Player:Dropdown({
     Value = SelectedDrink,
     Callback = function(value)
         SelectedDrink = value
-        print("🥤 เลือกเครื่องดื่ม:", SelectedDrink)
+
     end
 })
 
@@ -2201,7 +2509,7 @@ Player:Toggle({
     Value = autoEating,
     Callback = function(isEnabled)
         autoEating = isEnabled
-        print("🪄 Toggle changed:", isEnabled and "เริ่มทำงาน" or "หยุดแล้ว")
+      
 
         if isEnabled then
             task.spawn(function()
@@ -2209,15 +2517,15 @@ Player:Toggle({
                     if Hunger.Value < 50 then
                         -- ✅ กินอาหาร
                         InventoryEvent:FireServer("Use", SelectedFood)
-                        print("🍽️ กิน:", SelectedFood)
+                     
                         task.wait(4)
 
                         -- ✅ ดื่มน้ำ
                         InventoryEvent:FireServer("Use", SelectedDrink)
-                        print("🥤 ดื่ม:", SelectedDrink)
+                        
                         task.wait(4)
                     else
-                        print("🛑 หยุดกินเพราะ Hunger เต็ม (100)")
+                 
                         repeat
                             task.wait(1)
                         until Hunger.Value < 50 or not autoEating
@@ -2227,6 +2535,132 @@ Player:Toggle({
         end
     end
 })
+-- =========================================================
+-- 🧭 วาร์ปไปหาผู้เล่น (Dropdown + ปุ่ม + Auto-Refresh 1 วิ)
+-- =========================================================
+local PlayersService = game:GetService("Players")
+
+local SelectedTargetName = nil
+local playerDropdown   -- จะเก็บอินสแตนซ์ของ Dropdown ไว้เพื่อ refresh
+local lastHash = ""
+
+-- รวบรวมรายชื่อผู้เล่น (ยกเว้นตัวเรา) + เรียง A->Z
+local function getPlayerList()
+    local list = {}
+    for _, plr in ipairs(PlayersService:GetPlayers()) do
+        if plr ~= player then
+            table.insert(list, plr.Name)
+        end
+    end
+    table.sort(list)
+    if #list == 0 then
+        list = {"— ไม่มีผู้เล่นคนอื่น —"}
+    end
+    return list
+end
+
+-- แฮชง่าย ๆ เพื่อตรวจว่ารายชื่อเปลี่ยนจริงก่อนค่อยรีเฟรช
+local function listHash(t)
+    return table.concat(t, "|")
+end
+
+-- พยายามรีเฟรช Dropdown ให้รองรับหลายไลบรารี (มี/ไม่มี :Refresh)
+local function tryRefreshDropdown(newList)
+    if not playerDropdown then return end
+    local ok = false
+
+    -- ไล่พยายามทีละเมธอดที่พบบ่อยในหลาย UI libs
+    local tryMethods = {
+        function() return playerDropdown:Refresh(newList, true) end,
+        function() return playerDropdown:Set(newList) end,
+        function() return playerDropdown:SetOptions(newList) end,
+        function() return playerDropdown:SetList(newList) end,
+        function() return playerDropdown:Update(newList) end,
+        function() return playerDropdown:UpdateList(newList) end,
+    }
+
+    for _, f in ipairs(tryMethods) do
+        local s = pcall(f)
+        if s then ok = true break end
+    end
+
+    -- ถ้า lib ไม่มีเมธอดรีเฟรช ก็ข้าม (รายชื่อจะยังอัปเดต logic ภายใน แต่ UI อาจไม่เปลี่ยน)
+    if not ok then
+        -- คุณสามารถเปลี่ยนไปใช้วิธี recreate dropdown ตามไลบรารีของคุณได้ที่นี่ (ถ้าจำเป็น)
+        -- print("ℹ️ Dropdown library นี้ไม่รองรับ Refresh แบบไดนามิก")
+    end
+end
+
+-- ฟังก์ชันวาร์ป
+local function teleportToPlayerByName(name)
+    if not name or name == "" or name == "— ไม่มีผู้เล่นคนอื่น —" then
+      
+        return
+    end
+
+    local target = PlayersService:FindFirstChild(name)
+    if not target then
+       
+        return
+    end
+
+    local myChar = player.Character or player.CharacterAdded:Wait()
+    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local tChar = target.Character
+    local tHRP  = tChar and tChar:FindFirstChild("HumanoidRootPart")
+
+    if not (myHRP and tHRP) then
+       
+        return
+    end
+
+    -- วาร์ปไปด้านหลังเป้าหมาย ~3 สตัด และยกขึ้นเล็กน้อยกันติด
+    local targetCF = tHRP.CFrame
+    local offset   = targetCF * CFrame.new(0, 1.5, 3) -- +Y กันติดหัว, +Z = ด้านหลัง
+    myHRP.CFrame  = offset
+
+    print(("✅ วาร์ปไปหา %s สำเร็จ"):format(name))
+end
+
+-- ===== UI: Dropdown + Button =====
+playerDropdown = Player:Dropdown({
+    Title = "เลือกผู้เล่นที่จะวาร์ปหา",
+    List  = getPlayerList(),
+    Value = SelectedTargetName or "— ไม่มีผู้เล่นคนอื่น —",
+    Callback = function(v)
+        SelectedTargetName = (v == "— ไม่มีผู้เล่นคนอื่น —") and nil or v
+ 
+    end
+})
+
+-- ⚡ ปุ่มวาร์ป
+Player:Button({
+    Title = "วาร์ปไปหาผู้เล่นที่เลือก",
+    Callback = function()
+        teleportToPlayerByName(SelectedTargetName)
+    end
+})
+
+-- 🔄 อัปเดตรายชื่ออัตโนมัติทุก 1 วินาที
+task.spawn(function()
+    while true do
+        local list = getPlayerList()
+        local h = listHash(list)
+        if h ~= lastHash then
+            lastHash = h
+            tryRefreshDropdown(list)
+            -- ถ้าคนที่เลือกไว้หลุดออก ให้เคลียร์เป้าหมาย
+            local stillExists = false
+            for _, n in ipairs(list) do
+                if n == SelectedTargetName then stillExists = true break end
+            end
+            if not stillExists then
+                SelectedTargetName = (#list > 0 and list[1] ~= "— ไม่มีผู้เล่นคนอื่น —") and list[1] or nil
+            end
+        end
+        task.wait(1)
+    end
+end)
 
 end
 
@@ -2330,7 +2764,7 @@ local Aimbot = Window:Tab({Title = "ล็อคเป้า", Icon = "user"}) d
 
         if shootEvent and shootEvent:IsA("RemoteEvent") then
             shootEvent:FireServer(head.Position)
-            print("🎯 Locked shot at: " .. targetPlayer.Name)
+
             return true
         end
 
@@ -2340,48 +2774,50 @@ local Aimbot = Window:Tab({Title = "ล็อคเป้า", Icon = "user"}) d
     ----------------------------------------------------------------
     -- 🎯 หาผู้เล่นที่ใกล้ที่สุด
     ----------------------------------------------------------------
-    local function getDistance(pos1, pos2)
-        return (pos1 - pos2).Magnitude
-    end
+local function getDistance(pos1, pos2)
+    return (pos1 - pos2).Magnitude
+end
 
-    local function findNearestTarget()
-        local Players = game:GetService("Players")
-        local localPlayer = Players.LocalPlayer
-        local character = localPlayer.Character
-        if not character then return nil end
+local function findNearestTarget()
+    local Players = game:GetService("Players")
+    local localPlayer = Players.LocalPlayer
+    local character = localPlayer.Character
+    if not character then return nil end
 
-        local root = character:FindFirstChild("HumanoidRootPart")
-        if not root then return nil end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
 
-        local nearest = nil
-        local minDist = AimbotSettings.Range
+    local nearest = nil
+    local minDist = AimbotSettings.Range
 
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= localPlayer and player.Character then
-                local enemyChar = player.Character
-                local enemyRoot = enemyChar:FindFirstChild("HumanoidRootPart")
-                local enemyHumanoid = enemyChar:FindFirstChild("Humanoid")
-                local enemyHead = enemyChar:FindFirstChild("Head")
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local enemyChar = player.Character
+
+            -- ข้ามหมอเลย (ไม่ใช้ goto/continue)
+            if not isMedic(enemyChar) then
+                local enemyRoot     = enemyChar:FindFirstChild("HumanoidRootPart")
+                local enemyHumanoid = enemyChar:FindFirstChildOfClass("Humanoid")
+                local enemyHead     = enemyChar:FindFirstChild("Head")
 
                 if enemyHumanoid and enemyHumanoid.Health > 0 and enemyRoot and enemyHead then
                     local dist = getDistance(root.Position, enemyRoot.Position)
                     if dist <= minDist then
-                        -- ✅ เพิ่มเงื่อนไข PVP อีกชั้น
+                        -- ต้อง PVP ON
                         local nametag = enemyHead:FindFirstChild("NameTag")
-                        if nametag then
-                            local pvp = nametag:FindFirstChild("PVP ON")
-                            if pvp and (pvp.Visible or pvp.Enabled) then
-                                minDist = dist
-                                nearest = player
-                            end
+                        local pvp = nametag and nametag:FindFirstChild("PVP ON")
+                        if pvp and (pvp.Visible or pvp.Enabled) then
+                            minDist = dist
+                            nearest = player
                         end
                     end
                 end
             end
         end
-
-        return nearest
     end
+
+    return nearest
+end
 
     ----------------------------------------------------------------
     -- ♻️ Aimbot Loop
@@ -2411,7 +2847,7 @@ local Aimbot = Window:Tab({Title = "ล็อคเป้า", Icon = "user"}) d
     local Players = game:GetService("Players")
     local localPlayer = Players.LocalPlayer
     localPlayer.CharacterAdded:Connect(function()
-        print("🔄 Character respawned, restarting Aimbot")
+     
         task.wait(2)
         startAimbot()
     end)
@@ -2421,11 +2857,11 @@ local Aimbot = Window:Tab({Title = "ล็อคเป้า", Icon = "user"}) d
         if gp then return end
         if input.KeyCode == Enum.KeyCode.Backspace then
             AimbotSettings.Enabled = false
-            print("🚨 Aimbot forcefully disabled")
+         
         end
     end)
 
-    print("✅ Aimbot System Loaded – Ready to use!")
+   
 end
 
 -- 🔄 รีโหลดออโต้
@@ -2463,6 +2899,9 @@ Window:Line()
     local settings = Window:Tab({Title = "ตั้งค่า", Icon = "settings"}) do
     Settings:Section({Title = ""})
 
+
+
+    
 end
     Window:Line()
 
