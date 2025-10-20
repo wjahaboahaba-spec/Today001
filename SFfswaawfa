@@ -106,6 +106,25 @@ task.spawn(function()
 	end
 end)
 
+Tab:Button({
+    Title = 'กันโดนรถชน',
+    Desc = '',
+    Callback = function()
+        local Replicated = game:GetService("ReplicatedStorage")
+        local Events = Replicated:WaitForChild("Events")
+        local OnDeathEvent = Events:FindFirstChild("OnDeathEvent")
+
+        if OnDeathEvent then
+            OnDeathEvent:Destroy()
+            warn("")
+        else
+            warn("")
+        end
+    end,
+})
+
+
+
 Tab:Toggle({
 	Title = "AFK Coin",
 	Desc = "(เปิดทิ้งไว้ได้)",
