@@ -77,16 +77,22 @@ game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("Online
 
 
 
-    -- ✅ Respawn without cooldown
-    Tab:Button({
-        Title = 'เกิดใหม่ Nocooldown',
-        Desc = 'ใช้แล้วออโต้ฟามจะพัง ต้องรีเกม',
-        Callback = function()
-            ReplicatedStorage:WaitForChild('Events')
-                :WaitForChild('OnDeathEvent')
-                :FireServer('LoadCharacter')
-        end,
-    })
+Tab:Button({
+    Title = 'เกิดใหม่ Nocooldown',
+    Desc = 'ใช้แล้วออโต้ฟามจะพัง ต้องรีเกม',
+    Callback = function()
+        local args = {
+            [1] = "LoadCharacter"
+        }
+
+        game:GetService("ReplicatedStorage")
+            :WaitForChild("Events")
+            :WaitForChild("OnDeathEvent")
+            :FireServer(unpack(args))
+
+        warn("[OnDeathEvent] ✅ Fired: LoadCharacter")
+    end,
+})
 
 
 local AFKCoinEnabled = false  -- สถานะเปิด/ปิดระบบ
@@ -123,6 +129,22 @@ Tab:Button({
     end,
 })
 
+Tab:Button({
+    Title = 'อาหารไม่ลด [Inf]',
+    Desc = '',
+    Callback = function()
+        local player = game:GetService("Players").LocalPlayer
+        local hunger = player:FindFirstChild("Hunger") or (player.Character and player.Character:FindFirstChild("Hunger"))
+
+        if hunger then
+            hunger:Destroy()
+            warn("ควยไร")
+        else
+            warn("")
+        end
+    end,
+})
+
 
 
 Tab:Toggle({
@@ -139,13 +161,7 @@ Tab:Toggle({
 	end
 })
 
---[[ 
-  Halloween Gems — Auto Collect (with Live Rescan + Toggle)
-  - สแกน workspace["Halloween Gems"] ทั้งหมดแบบ recursive
-  - อัปเดตรายการเป้าเรื่อย ๆ (rescan loop)
-  - รองรับทั้ง ProximityPrompt และ Touch
-  - ผูกกับ Toggle: เปิด = ทำงาน, ปิด = หยุด
-]]
+
 
 -- ========= CONFIG =========
 local CONTAINER_NAME = "Halloween Gems"
@@ -347,25 +363,43 @@ Tab:Toggle({
         end,
     })
 
--- ตัวแปรสถานะการเปิด/ปิดฟีเจอร์
+-- ตัวแปรสถานะและการเชื่อม Event
 local cooldownConnection = nil
+local originalHoldDurations = {} -- << เก็บ HoldDuration เดิม
 
--- ฟังก์ชันเปิดใช้งาน bypass cooldown
+-- ✅ เปิด Bypass Cooldown
 local function enableBypassCooldown()
+    if cooldownConnection then return end -- ป้องกันเชื่อมซ้ำ
+
     cooldownConnection = game:GetService("ProximityPromptService").PromptButtonHoldBegan:Connect(function(prompt)
+        -- เก็บค่าเดิมไว้ก่อนถ้ายังไม่เคยเก็บ
+        if not originalHoldDurations[prompt] then
+            originalHoldDurations[prompt] = prompt.HoldDuration
+        end
+        -- เปลี่ยน HoldDuration ให้เป็น 0
         prompt.HoldDuration = 0
     end)
 end
 
--- ฟังก์ชันปิดการใช้งาน bypass cooldown
+-- 🛑 ปิด Bypass Cooldown
 local function disableBypassCooldown()
     if cooldownConnection then
         cooldownConnection:Disconnect()
         cooldownConnection = nil
     end
+
+    -- คืนค่า HoldDuration เดิมให้ทุก prompt ที่เราเคยแก้
+    for prompt, duration in pairs(originalHoldDurations) do
+        if prompt and prompt:IsA("ProximityPrompt") then
+            prompt.HoldDuration = duration
+        end
+    end
+
+    -- เคลียร์ตารางหลังคืนหมด
+    table.clear(originalHoldDurations)
 end
 
-
+-- ✅ ปุ่ม Toggle UI
 Tab:Toggle({
     Title = "Bypass Nocooldown จกปูนไว+สายไฟ",
     Desc = "",
@@ -373,10 +407,10 @@ Tab:Toggle({
     Callback = function(state)
         if state then
             enableBypassCooldown()
-            print("Bypass Enabled")
+            print("✅ Bypass Enabled")
         else
             disableBypassCooldown()
-            print("Bypass Disabled")
+            print("🛑 Bypass Disabled")
         end
     end
 })
@@ -1147,35 +1181,55 @@ Window:Line()
 -----------------------------------------------------
 -- 🧺 งานขาว (Placeholder)
 -----------------------------------------------------
-local White = Window:Tab({ Title = 'ออโต้ปล่อยฟามเงิน', Icon = 'tag' })
+local White = Window:Tab({ Title = 'กำลังแก้ไขอยู่', Icon = 'tag' })
     White:Section({ Title = 'ปล่ยฟามเงินรัวๆ' })
 
 
 do
-
-local Players = game:GetService('Players')
-local ReplicatedStorage = game:GetService('ReplicatedStorage')
-local ProximityPromptService = game:GetService('ProximityPromptService')
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local player = Players.LocalPlayer
 
--- สถานะเปิด–ปิดระบบฟาร์ม
+-- 🍇 สถานะเปิด–ปิดระบบฟาร์ม
 local farmingEnabled = false
 
--- 🌀 ฟังก์ชันเทเลพอร์ต
-local function tpTo(pos)
-    if player.Character and player.Character:FindFirstChild('HumanoidRootPart') then
-        player.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+-- ✅ บล็อก Animation ID ที่ไม่ต้องการให้เล่น
+local blockedAnimations = {
+    ["rbxassetid://85841422982794"] = true
+}
+
+local function onAnimationPlayed(animTrack)
+    local anim = animTrack.Animation
+    local id = anim.AnimationId
+    local name = anim.Name or "Unknown"
+
+    print("🎬 Animation Played:")
+    print("🆔 ID:", id)
+    print("🏷️ Name:", name)
+
+    if blockedAnimations[id] then
+        warn("🚫 Blocked animation detected! Stopping:", id)
+        animTrack:Stop()
     end
 end
 
--- ⚙️ ฟังก์ชัน bypass cooldown
-local function bypasscooldown()
-    ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-        prompt.HoldDuration = 0
-    end)
+local function hookAnimations()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hum = char:WaitForChild("Humanoid")
+    hum.AnimationPlayed:Connect(onAnimationPlayed)
+    print("✅ Animation hook activated")
 end
 
--- 🧺 ฟังก์ชันถือ Basket
+-- 🌀 วาร์ปพรวดเดียว (ใช้สำหรับ "ขาย" หรือจุดเริ่มต้น)
+local function tpTo(pos)
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = CFrame.new(pos)
+    end
+end
+
+-- 🧺 ถือ Basket
 local function equipBasket()
     local backpack = player:WaitForChild('Backpack')
     local char = player.Character or player.CharacterAdded:Wait()
@@ -1192,7 +1246,7 @@ local function equipBasket()
     end
 end
 
--- 🔍 หา ProximityPrompt ภายในโมเดล
+-- 🔍 หา ProximityPrompt
 local function findPrompt(model)
     for _, obj in ipairs(model:GetDescendants()) do
         if obj:IsA('ProximityPrompt') then
@@ -1202,7 +1256,7 @@ local function findPrompt(model)
     return nil
 end
 
--- 🎒 เช็คว่า Backpack เต็มไหม (100/100)
+-- 🎒 เช็คว่า Backpack เต็มไหม
 local function isBackpackFull()
     local gui = player:FindFirstChild('PlayerGui')
     if not gui then return false end
@@ -1231,27 +1285,79 @@ local function isBackpackFull()
     return false
 end
 
--- 🍇 ฟังก์ชันวาร์ปไปเก็บองุ่น
+-- 🌀 ลอยไปหาตำแหน่งแบบช้า ๆ + platform ใต้เท้า
+local function slowTeleportWithPlatform(pos)
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local hrp = char.HumanoidRootPart
+    local start = hrp.Position
+    local goal = pos
+
+    local distance = (goal - start).Magnitude
+    local steps = math.floor(distance / 5)
+    local dir = (goal - start).Unit
+
+    for i = 1, steps do
+        if not farmingEnabled then return end
+        hrp.CFrame = CFrame.new(start + dir * (i * 5))
+        task.wait(0.05)
+    end
+
+    -- สร้างพื้นชั่วคราวใต้ตำแหน่ง
+    local function createPlatform(position)
+        local part = Instance.new("Part")
+        part.Anchored = true
+        part.Size = Vector3.new(6, 1, 6)
+        part.Position = position - Vector3.new(0, 2.5, 0)
+        part.Transparency = 1
+        part.CanCollide = true
+        part.Name = "TempPlatform"
+        part.Parent = workspace
+        game:GetService("Debris"):AddItem(part, 5)
+    end
+
+    createPlatform(goal)
+    hrp.CFrame = CFrame.new(goal)
+end
+
+-- 🌀 ใช้สำหรับลอยไปหาต้นองุ่น (ไม่มี jump)
+local function slowTeleportDirect(pos)
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local hrp = char.HumanoidRootPart
+    local start = hrp.Position
+    local goal = pos
+
+    local distance = (goal - start).Magnitude
+    local steps = math.max(1, math.floor(distance / 4))
+    local dir = (goal - start).Unit
+
+    for i = 1, steps do
+        if not farmingEnabled then return end
+        local nextPos = start + dir * (i * 4)
+        hrp.CFrame = CFrame.new(nextPos)
+        task.wait(0.1)
+    end
+
+    hrp.CFrame = CFrame.new(goal)
+end
+
+-- 🍇 ฟาร์มองุ่นแบบลอยไปหาแต่ละต้น
 local function farmGrapes()
     local grapeFolder = workspace:WaitForChild('Plants'):WaitForChild('Grape')
 
     while farmingEnabled do
-        if isBackpackFull() then
-           
-            break
-        end
+        if isBackpackFull() then break end
 
         for _, grape in ipairs(grapeFolder:GetChildren()) do
-            if not farmingEnabled then return end
-            if isBackpackFull() then
-              
-                return
-            end
+            if not farmingEnabled or isBackpackFull() then return end
 
             if grape:IsA('Model') then
                 local part = grape:FindFirstChildWhichIsA('BasePart')
                 if part then
-                    tpTo(part.Position + Vector3.new(0, 3, 0))
+                    slowTeleportDirect(part.Position + Vector3.new(0, 3, 0))
                     task.wait(0.2)
 
                     local prompt = findPrompt(grape)
@@ -1268,55 +1374,51 @@ local function farmGrapes()
     end
 end
 
--- 🧃 คราฟองุ่นเป็นน้ำองุ่น (ทีละ 1 แบบรัว ๆ)
+-- 🧃 คราฟองุ่นแบบวาร์ปช้า + platform
 local function craftGrapes()
     local inv = player:WaitForChild('Inventory')
     local grape = inv:FindFirstChild('Grape')
     if not grape then return end
 
-    tpTo(Vector3.new(-3440, 37, -153))
+    local craftStation = workspace:WaitForChild("CraftStation")
+    local part = craftStation:FindFirstChildWhichIsA("BasePart")
+    if not part then return end
+
+    slowTeleportWithPlatform(part.Position + Vector3.new(0, 3, 0))
     task.wait(1)
 
     while grape and grape.Value > 0 and farmingEnabled do
-        local args = { 'Craft_Farm', 'Grape', 1 } -- คราฟทีละ 1
+        local args = { 'Craft_Farm', 'Grape', 1 }
         ReplicatedStorage:WaitForChild('Events'):WaitForChild('CraftEvent'):FireServer(unpack(args))
-        task.wait(0.25) -- คราฟรัว ๆ เร็วพอดี
+        task.wait(0.25)
     end
 end
 
--- 💰 ขายน้ำองุ่นทั้งหมดในครั้งเดียว
+-- 💰 ขายน้ำองุ่นแบบวาร์ปทันที
 local function sellJuice()
     local inv = player:WaitForChild('Inventory')
     local juice = inv:FindFirstChild('Grape Juice')
-    if not juice then
-
-        return
-    end
-
-    local amount = juice.Value
-    if amount <= 0 then
-       
-        return
-    end
+    if not juice or juice.Value <= 0 then return end
 
     tpTo(Vector3.new(372, 7, 189))
     task.wait(1)
 
-    local args = { 'Grape Juice', amount }
+    local args = { 'Grape Juice', juice.Value }
     ReplicatedStorage:WaitForChild('Events'):WaitForChild('SellEvent'):FireServer(unpack(args))
-  
 end
 
--- 🚀 ฟังก์ชันหลักของระบบฟาร์ม (รันต่อเนื่อง)
+-- 🚀 ฟังก์ชันหลัก
 local function startFarming()
     task.spawn(function()
+        hookAnimations()
+        tpTo(Vector3.new(-3554, 36, -183))
+        task.wait(1)
+
         while farmingEnabled do
-            tpTo(Vector3.new(-3554, 36, -183))
+            slowTeleportWithPlatform(Vector3.new(-3554, 36, -183))
             task.wait(1)
 
             equipBasket()
-            bypasscooldown()
-
             farmGrapes()
             if not farmingEnabled then break end
 
@@ -1331,7 +1433,7 @@ local function startFarming()
     end)
 end
 
--- 🧠 ปุ่ม Toggle เปิด/ปิดระบบฟาร์ม
+-- 🧠 ปุ่ม Toggle เปิด/ปิด
 White:Toggle({
     Title = "🍇 ฟามองุ่นพร้อมขายเงิน",
     Desc = "",
@@ -1511,7 +1613,7 @@ Window:Line()
 
 
 
-local FoodsAll = Window:Tab({Title = "ฟามหาเงินทั่วไป", Icon = "tag"}) do
+local FoodsAll = Window:Tab({Title = "กำลังแก้ไขอยู่", Icon = "tag"}) do
     FoodsAll:Section({Title = "ออโต้ฟาม สตอรเบอรรี่"})
 
 
@@ -1965,10 +2067,22 @@ label.Text = "เงินเพิ่ม: +0"
 label.Visible = false
 label.Parent = moneyGui
 
--- ✅ ปิด HoldDuration ปุ่ม E
-ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-	prompt.HoldDuration = 0
-end)
+local cooldownConnection = nil
+
+local function enableBypassCooldown()
+    if cooldownConnection then return end
+    cooldownConnection = game:GetService("ProximityPromptService").PromptButtonHoldBegan:Connect(function(prompt)
+        prompt.HoldDuration = 0
+    end)
+end
+
+local function disableBypassCooldown()
+    if cooldownConnection then
+        cooldownConnection:Disconnect()
+        cooldownConnection = nil
+    end
+end
+
 
 -- ✅ ฟังก์ชันกด E
 local function pressE()
@@ -2989,3 +3103,41 @@ Window:Notify({
     Desc = 'โหลดทุกอย่างเสร็จสมบูรณ์! Credit leak by Nexon Hub',
     Time = 4,
 })
+
+
+
+--  ปิด  Animations เก็
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Animation ID ที่คุณต้องการบล็อก
+local blockedAnimations = {
+	["rbxassetid://85841422982794"] = true
+}
+
+-- เมื่อเล่น Animation
+local function onAnimationPlayed(animTrack)
+	local anim = animTrack.Animation
+	local id = anim.AnimationId
+	local name = anim.Name or "Unknown"
+
+	
+
+	if blockedAnimations[id] then
+	
+		animTrack:Stop()
+		-- หรือ destroy ถ้าต้องการลบทิ้ง:
+		-- animTrack:Destroy()
+	end
+end
+
+-- Hook กับ Humanoid ของตัวละคร
+local function hookAnimations()
+	local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	local hum = char:WaitForChild("Humanoid")
+
+	hum.AnimationPlayed:Connect(onAnimationPlayed)
+	print("✅ Animation hook activated")
+end
+
+hookAnimations()
