@@ -529,7 +529,7 @@
     end
 
     Window:Line()
-
+-----------------------------------------------------
     -----------------------------------------------------
     local Black = Window:Tab({Title = "งานดำ", Icon = "tag"}) do
         Black:Section({Title = "สายงานดำ ฟารม์"})
@@ -1321,49 +1321,58 @@
     end
 
     -- 💰 ขาย Grape Juice แบบวาร์ป
-    local function sellJuice()
-        local inv = player:WaitForChild("Inventory")
-        local juice = inv:FindFirstChild("Grape Juice")
+ local function sellJuice()
+    local inv = player:WaitForChild("Inventory")
+    local juice = inv:FindFirstChild("Grape Juice")
 
-        if juice and juice.Value > 0 then
-            tpTo(Vector3.new(-446, 7, 1152)) -- จุดขาย
-            task.wait(1)
+    if juice and juice.Value > 0 then
+        tpTo(Vector3.new(-446, 7, 1152)) -- จุดขาย
+        print("🕐 รอ 5 วิ ก่อนขายของ...")
+        task.wait(5)
 
-            local sellArgs = { "Grape Juice", juice.Value }
-            ReplicatedStorage:WaitForChild("Events"):WaitForChild("SellEvent"):FireServer(unpack(sellArgs))
-        end
+        local sellArgs = { "Grape Juice", juice.Value }
+        ReplicatedStorage:WaitForChild("Events"):WaitForChild("SellEvent"):FireServer(unpack(sellArgs))
+        print("💰 ขาย Grape Juice จำนวน:", juice.Value)
     end
+end
 
-    -- 🛠️ คราฟองุ่น + ตรวจเงื่อนไขก่อนขาย
-    local function handleCraftAndSell()
-        local inv = player:WaitForChild("Inventory")
-        local grape = inv:FindFirstChild("Grape")
+ local function handleCraftAndSell()
+    local inv = player:WaitForChild("Inventory")
+    local grape = inv:FindFirstChild("Grape")
+    local juice = inv:FindFirstChild("Grape Juice")
 
-        -- ถ้ายังมี Grape Juice ในตัว → รอ 1.5 วิ → วาร์ปไปขายก่อนเลย
-        local juice = inv:FindFirstChild("Grape Juice")
-        if juice and juice.Value > 0 then
-            task.wait(1.5)
-            sellJuice()
-        end
-
-        if not grape or grape.Value <= 0 then return end
-
-        -- 1️⃣ วาร์ปไป craft
-        tpTo(Vector3.new(-3448, 37, -153))
-        task.wait(1)
-
-        -- 2️⃣ คราฟจนหมด
-        while grape and grape.Value > 0 and farmingEnabled do
-            local args = { "Craft_Farm", "Grape", 1 }
-            ReplicatedStorage:WaitForChild("Events"):WaitForChild("CraftEvent"):FireServer(unpack(args))
-            task.wait(0.15)
-        end
-
-        -- 3️⃣ รอ 2 วิ แล้วไปขายทันที
-        task.wait(2)
+    -- ถ้ามี Grape Juice ค้างอยู่ → วาร์ปไปขายก่อน
+    if juice and juice.Value > 0 then
+        print("🍷 พบ Grape Juice ในตัว → ไปขายก่อน")
         sellJuice()
+        task.wait(1.5)
     end
 
+    -- ถ้าไม่มีองุ่นเลยก็ไม่ต้องทำอะไร
+    if not grape or grape.Value <= 0 then return end
+
+    -- 🔨 วาร์ปไป craft
+    tpTo(Vector3.new(-3448, 37, -153))
+    task.wait(1)
+
+    -- คราฟจนหมด
+    while grape and grape.Value > 0 and farmingEnabled do
+        local args = { "Craft_Farm", "Grape", 1 }
+        ReplicatedStorage:WaitForChild("Events"):WaitForChild("CraftEvent"):FireServer(unpack(args))
+        task.wait(0.15)
+    end
+
+    -- เสร็จแล้ว → รอ 5 วิ แล้วไปขาย
+    print("🕐 คราฟเสร็จ → รอ 5 วิ ก่อนขาย...")
+
+    sellJuice()
+
+    -- ✅ กลับไปฟาร์มต่อ
+    print("🔄 กลับไปฟาร์มองุ่นต่อ...")
+       task.wait(5)
+    tpTo(Vector3.new(-3554, 36, -183))
+    task.wait(2)
+end
     -- 🚀 ฟังก์ชันหลัก
     local function startFarming()
         task.spawn(function()
@@ -1378,7 +1387,7 @@
                 equipBasket()
                 farmGrapes()
                 if not farmingEnabled then break end
-
+           
                 handleCraftAndSell()
                 if not farmingEnabled then break end
             end
@@ -1502,9 +1511,9 @@
 
     -- 💰 ขาย Steak ทั้งหมด
     local function sellSteak()
-        task.wait(2)
-        tpTo(Vector3.new(-446, 7, 1152))
         task.wait(1)
+        tpTo(Vector3.new(-446, 7, 1152))
+        task.wait(3)
 
         local inv = player:WaitForChild("Inventory")
         local steak = inv:FindFirstChild("Steak")
@@ -1516,6 +1525,7 @@
         else
         
         end
+        task.wait(5)
     end
 
     -- 🚀 ฟังก์ชันหลัก (วนลูปครบวงจร)
@@ -1531,7 +1541,7 @@
                 if isBackpackFull() then
                     craftMeat()
                     if not runFarm then break end
-                    task.wait(1.5)
+                    task.wait(4)
                     sellSteak()
                 end
 
@@ -1683,7 +1693,7 @@ end
 local function sellGrilledFish()
     task.wait(2)
     tpTo(Vector3.new(-446, 7, 1152))
-    task.wait(1)
+    task.wait(3.5)
 
     local inv = player:WaitForChild("Inventory")
     local grilled = inv:FindFirstChild("Grilled Fish")
@@ -1691,6 +1701,7 @@ local function sellGrilledFish()
         local args = { "Grilled Fish", grilled.Value }
         ReplicatedStorage:WaitForChild("Events"):WaitForChild("SellEvent"):FireServer(unpack(args))
     end
+    task.wait(4.5)
 end
 
 -- 🎣 ตกปลาแบบลูป
@@ -1722,7 +1733,7 @@ local function startFishingLoop()
                 print("🎣 Equipped Fishing Rod")
                 task.wait(1)
 
-                for i = 1, 4 do
+                for i = 1, 5 do
                     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
                     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
                     task.wait(0.2)
@@ -1749,16 +1760,15 @@ end
 
 -- 🧠 ปุ่มเปิด/ปิด
 White:Toggle({
-    Title = "🎣 ฟาร์มตกปลา ",
+    Title = "🎣 ฟาร์มตกปลา (อัพเดท) ",
     Desc = "",
     Value = false,
     Callback = function(v)
         fishingEnabled = v
         if v then
-            print("✅ เริ่มฟาร์มตกปลา")
-            startFishingLoop()
+           
         else
-            print("🛑 หยุดฟาร์มตกปลา (รอหยุดลูป)")
+         
         end
     end
 })
@@ -1767,616 +1777,7 @@ White:Toggle({
 
 
 
-    end
-
-    Window:Line()
-
-
-
-    local FoodsAll = Window:Tab({Title = "กำลังแก้ไขอยู่", Icon = "tag"}) do
-        FoodsAll:Section({Title = "ออโต้ฟาม สตอรเบอรรี่"})
-
-
-
-    local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local TweenService = game:GetService("TweenService")
-    local LocalPlayer = Players.LocalPlayer
-
-    local fruitData = {
-        Strawberry = {
-            Folder = workspace.Plants:WaitForChild("Strawberry"),
-            FarmPos = Vector3.new(-4462, 36, 563),
-            CraftPos = Vector3.new(-4529, 36, 614),
-            ModelPath = "Model",
-            Category = "🍓 ผลไม้เบอร์รี่"
-        },
-        Banana = {
-            Folder = workspace.Plants:WaitForChild("Banana"),
-            FarmPos = Vector3.new(-4564, 24, -2843),
-            CraftPos = Vector3.new(-4583, 17, -2676),
-            ModelPath = "Model",
-            Category = "🍌 ผลไม้กล้วย"
-        },
-
-    Corn = {
-            Folder = workspace.Plants:WaitForChild("Corn"),
-            FarmPos = Vector3.new(-4875, 36, -3704),
-            CraftPos = Vector3.new(-4848, 37, -3787),
-            ModelPath = "Model",
-            Category = "🌽 ผลไม้ข้าวโพด"
-        },
-
-
-        Apple = {
-            Folder = workspace.Plants:WaitForChild("Apple"),
-            FarmPos = Vector3.new(-2126, 16, -3279),
-            CraftPos = Vector3.new(-2048, 17, -3191),
-            ModelPath = "Model.Trunk",
-            Category = "🍎 ผลไม้ทั่วไป"
-        },
-        Orange = {
-            Folder = workspace.Plants:WaitForChild("Orange"),
-            FarmPos = Vector3.new(-3620, 15, -3893),
-            CraftPos = Vector3.new(-3612, 17, -3875),
-            ModelPath = "Model",
-            Category = "🍊 ผลไม้ส้ม"
-        },
-        Durian = {
-            Folder = workspace.Plants:WaitForChild("Durian"),
-            FarmPos = Vector3.new(-1823, 16, -1911),
-            CraftPos = Vector3.new(-1869, 17, -1876),
-            ModelPath = "Model",
-            Category = "🥭 ผลไม้ทุเรียน"
-        },
-        Grape = {
-            Folder = workspace.Plants:WaitForChild("Grape"),
-            FarmPos = Vector3.new(-3555, 37, -167),
-            CraftPos = Vector3.new(-3441, 37, -152),
-            ModelPath = "Model",
-            Category = "🍇 ผลไม้เบอร์รี่"
-        },
-        Mango = {
-            Folder = workspace.Plants:WaitForChild("Mango"),
-            FarmPos = Vector3.new(-1675, 39, -38),
-            CraftPos = Vector3.new(-1865, 37, -126),
-            ModelPath = "Model.Model",
-            Category = "🥭 ผลไม้มะม่วง"
-        },
-    Rice = {
-        Folder = workspace.Plants:WaitForChild("Rice"),
-        FarmPos = Vector3.new(-1434, 16, 929),
-        CraftPos = Vector3.new(-1411, 17, 1081),
-        ModelPath = "Model",
-        Category = "🌾 พืชผลทางการเกษตร",
-        ToolName = "Sickle", -- ใช้สำหรับฟาร์ม
-        CraftItemName = "Wheat" -- ✅ ใช้ตรงนี้เพื่อกำหนดชื่อไอเท็มสำหรับคราฟ
-    },
-
-    }
-
-    local farmFlags, craftFlags = {}, {}
-
-    for name in pairs(fruitData) do
-        farmFlags[name] = { enabled = false, running = false }
-        craftFlags[name] = { enabled = false, running = false }
-    end
-
-    -- ฟังก์ชันวาร์ปแบบใหม่
-    local function safeTeleport(cframe)
-        local Character = LocalPlayer.Character
-        if not Character then 
-            Character = LocalPlayer.CharacterAdded:Wait()
-            task.wait(1)
-        end
-        
-        local HRP = Character:FindFirstChild("HumanoidRootPart")
-        if not HRP then return false end
-        
-        HRP.CFrame = cframe
-        task.wait(0.5)
-        return true
-    end
-
-    local function isInventoryFullByText()
-        local gui = LocalPlayer:FindFirstChild("PlayerGui")
-        if not gui then return false end
-        
-        local menu = gui:FindFirstChild("Menu")
-        if not menu then return false end
-        
-        local backpackFrame = menu:FindFirstChild("BackpackFrame")
-        if not backpackFrame then return false end
-        
-        local top1 = backpackFrame:FindFirstChild("TOP1")
-        if not top1 then return false end
-        
-        local allItem = top1:FindFirstChild("AllItem")
-        if not allItem then return false end
-        
-        local text = allItem.Text or ""
-        local current, max = text:match("^(%d+)/(%d+)$")
-        return tonumber(current) and tonumber(max) and tonumber(current) >= tonumber(max)
-    end
-    local function equipOrRequestTool(toolName)
-        local Character = LocalPlayer.Character
-        if not Character then
-            Character = LocalPlayer.CharacterAdded:Wait()
-        end
-
-        local Backpack = LocalPlayer:WaitForChild("Backpack")
-        local tool = Backpack:FindFirstChild(toolName) or Character:FindFirstChild(toolName)
-
-        if tool then
-            if Backpack:FindFirstChild(toolName) then
-                tool.Parent = Character
-            end
-        else
-            local inventoryEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("InventoryEvent")
-            inventoryEvent:FireServer("Use", toolName)
-            task.wait(1)
-        end
-    end
-
-    -- ฟังก์ชันค้นหา ProximityPrompt และ Part ที่แก้ไขแล้ว
-    local function findFruitPrompt(model, modelPath)
-        -- ค้นหา ProximityPrompt ก่อน
-        local prompt = model:FindFirstChildWhichIsA("ProximityPrompt", true)
-        if not prompt then
-            return nil, nil
-        end
-        
-        -- หา Part ที่มี Position (ต้องเป็น BasePart)
-        local targetPart = nil
-        
-        -- ลองหา Part จาก parent ของ prompt ก่อน
-        local parent = prompt.Parent
-        if parent and parent:IsA("BasePart") then
-            targetPart = parent
-        else
-            -- ถ้า parent ไม่ใช่ BasePart ให้หา BasePart ใน model
-            for _, descendant in pairs(model:GetDescendants()) do
-                if descendant:IsA("BasePart") and descendant.Name ~= "HumanoidRootPart" then
-                    targetPart = descendant
-                    break
-                end
-            end
-        end
-        
-        return prompt, targetPart
-    end
-
-    local function collectFruit(name, data)
-        local flags = farmFlags[name]
-        if flags.running then return end
-        flags.running = true
-
-        local Character = LocalPlayer.Character
-        if not Character then
-            Character = LocalPlayer.CharacterAdded:Wait()
-            task.wait(1)
-        end
-        
-        local HRP = Character:WaitForChild("HumanoidRootPart")
-        
-    
-        
-        -- วาร์ปไปยังตำแหน่งฟาร์ม
-        local farmCFrame = CFrame.new(data.FarmPos)
-        if safeTeleport(farmCFrame) then
-        
-        else
-        
-            flags.running = false
-            return
-        end
-        
-        task.wait(2)
-
-    equipOrRequestTool(data.ToolName or "Basket")
-
-        task.wait(1)
-
-        while flags.enabled do
-            if isInventoryFullByText() then
-                warn("Inventory เต็ม — หยุดชั่วคราว: " .. name)
-                while isInventoryFullByText() and flags.enabled do 
-                    task.wait(5) 
-                end
-                if not flags.enabled then break end
-            end
-
-            local foundFruit = false
-            for _, model in pairs(data.Folder:GetChildren()) do
-                if not flags.enabled then break end
-                if isInventoryFullByText() then break end
-
-                local prompt, part = findFruitPrompt(model, data.ModelPath)
-                
-                -- ตรวจสอบว่า part เป็น BasePart จริงๆ
-                if prompt and part and part:IsA("BasePart") then
-                    foundFruit = true
-                    
-                    print("พบผลไม้ " .. name)
-                    
-                    -- ตั้งค่า ProximityPrompt
-                    prompt.HoldDuration = 0
-                    prompt.RequiresLineOfSight = false
-                    prompt.MaxActivationDistance = 100
-                    
-                    -- วาร์ปไปยังผลไม้ (ใช้ Position จาก BasePart)
-                    local fruitCFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0))
-                    
-                    if safeTeleport(fruitCFrame) then
-                        task.wait(0.5)
-                        
-                        -- ตรวจสอบอีกครั้งก่อนเก็บ
-                        if prompt and prompt:IsA("ProximityPrompt") then
-                            -- พยายามเก็บหลายครั้ง
-                            for i = 1, 3 do
-                                fireproximityprompt(prompt)
-                                task.wait(0.1)
-                            end
-                    
-                        end
-                    end
-                    task.wait(0.3)
-                end
-            end
-
-            -- ถ้าไม่พบผลไม้ให้รอสักครู่ก่อนค้นหาใหม่
-            if not foundFruit then
-            
-                task.wait(3)
-            else
-                task.wait(1)
-            end
-        end
-
-
-        flags.running = false
-    end
-
-    local function autoCraftFruit(name, data)
-        local flags = craftFlags[name]
-        if flags.running then return end
-        flags.running = true
-
-        local Character = LocalPlayer.Character
-        if not Character then
-            Character = LocalPlayer.CharacterAdded:Wait()
-        end
-        
-        local HRP = Character:WaitForChild("HumanoidRootPart")
-        
-        -- วาร์ปไปยังตำแหน่งคราฟ (ถ้ามี)
-        if data.CraftPos and data.CraftPos.Magnitude > 0 then
-            safeTeleport(CFrame.new(data.CraftPos))
-            task.wait(1)
-        end
-
-        while flags.enabled do
-            local craftEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("CraftEvent")
-        local itemName = data.CraftItemName or name
-    craftEvent:FireServer("Craft_Farm", itemName, 1)
-
-            task.wait(0.2)
-        end
-
-        flags.running = false
-    end
-
-    -- 🧭 แบ่งหมวดหมู่ผลไม้
-    local categoryOrder = {
-        "🍊 ผลไม้ส้ม",
-        "🍓 ผลไม้เบอร์รี่", 
-        "🍌 ผลไม้ทั่วไป",
-        "🌽 ข้าวโพด",
-        "🥭 ผลไม้มะม่วง",
-        "🌰 ผลไม้ทุเรียน",
-        "🌾 พืชผลทางการเกษตร"
-    }
-
-
-    local fruitsByCategory = {}
-    for name, data in pairs(fruitData) do
-        if not fruitsByCategory[data.Category] then
-            fruitsByCategory[data.Category] = {}
-        end
-        table.insert(fruitsByCategory[data.Category], {name = name, data = data})
-    end
-
-    -- สร้าง UI แยกตามหมวดหมู่
-    for _, category in ipairs(categoryOrder) do
-        if fruitsByCategory[category] then
-            FoodsAll:Section({Title = category})
-            
-            for _, fruit in ipairs(fruitsByCategory[category]) do
-                local name = fruit.name
-                local data = fruit.data
-                
-                -- ไอคอนสำหรับแต่ละผลไม้
-        local icons = {
-        Strawberry = "🍓",
-        Banana = "🍌", 
-        Corn = "🌽", 
-        Apple = "🍎",
-        Orange = "🍊",
-        Durian = "🟤",
-        Grape = "🍇",
-        Mango = "🥭",
-        Rice = "🌾"
-    }
-
-                
-                local icon = icons[name] or "🍎"
-                
-                FoodsAll:Toggle({
-                    Title = icon .. " ฟาร์ม " .. name,
-                    Callback = function(v)
-                        farmFlags[name].enabled = v
-                        if v and not farmFlags[name].running then
-                            task.spawn(function()
-                                collectFruit(name, data)
-                            end)
-                        end
-                    end
-                })
-
-                if data.CraftPos and data.CraftPos.Magnitude > 0 then
-                    FoodsAll:Toggle({
-                        Title = icon .. " คราฟ " .. name,
-                        Callback = function(v)
-                            craftFlags[name].enabled = v
-                            if v and not craftFlags[name].running then
-                                task.spawn(function()
-                                    autoCraftFruit(name, data)
-                                end)
-                            end
-                        end
-                    })
-                end
-            end
-        end
-    end
-
-    -- ส่วนสำหรับผลไม้ที่ไม่มีใน categoryOrder
-    for category, fruits in pairs(fruitsByCategory) do
-        local found = false
-        for _, orderedCategory in ipairs(categoryOrder) do
-            if category == orderedCategory then
-                found = true
-                break
-            end
-        end
-        
-        if not found then
-            FoodsAll:Section({Title = category})
-            
-            for _, fruit in ipairs(fruits) do
-                local name = fruit.name
-                local data = fruit.data
-                
-                local icons = {
-                    Strawberry = "🍓",
-                    Banana = "🍌",
-                    Corn = "🌽",
-                    Apple = "🍎", 
-                    Orange = "🍊",
-                    Durian = "🟤",
-                    Grape = "🍇",
-                    Mango = "🥭"
-                }
-                
-                local icon = icons[name] or "🍎"
-                
-                FoodsAll:Toggle({
-                    Title = icon .. " ฟาร์ม " .. name,
-                    Callback = function(v)
-                        farmFlags[name].enabled = v
-                        if v and not farmFlags[name].running then
-                            task.spawn(function()
-                                collectFruit(name, data)
-                            end)
-                        end
-                    end
-                })
-
-                if data.CraftPos and data.CraftPos.Magnitude > 0 then
-                    FoodsAll:Toggle({
-                        Title = icon .. " คราฟ " .. name,
-                        Callback = function(v)
-                            craftFlags[name].enabled = v
-                            if v and not craftFlags[name].running then
-                                task.spawn(function()
-                                    autoCraftFruit(name, data)
-                                end)
-                            end
-                        end
-                    })
-                end
-            end
-        end
-    end
-
-    local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local ProximityPromptService = game:GetService("ProximityPromptService")
-    local VirtualInputManager = game:GetService("VirtualInputManager")
-    local CoreGui = game:GetService("CoreGui")
-
-    local LocalPlayer = Players.LocalPlayer
-    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local root = Character:WaitForChild("HumanoidRootPart")
-
-    -- ✅ GUI แสดงเงินเพิ่ม
-    local moneyGui = Instance.new("ScreenGui")
-    moneyGui.Name = "MoneyGainGui"
-    moneyGui.ResetOnSpawn = false
-    moneyGui.Parent = CoreGui
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.3, 0, 0.07, 0)
-    label.Position = UDim2.new(0.35, 0, 0.05, 0)
-    label.BackgroundTransparency = 0.3
-    label.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    label.TextColor3 = Color3.fromRGB(0, 255, 0)
-    label.TextScaled = true
-    label.Font = Enum.Font.GothamBold
-    label.Text = "เงินเพิ่ม: +0"
-    label.Visible = false
-    label.Parent = moneyGui
-
-    local cooldownConnection = nil
-
-    local function enableBypassCooldown()
-        if cooldownConnection then return end
-        cooldownConnection = game:GetService("ProximityPromptService").PromptButtonHoldBegan:Connect(function(prompt)
-            prompt.HoldDuration = 0
-        end)
-    end
-
-    local function disableBypassCooldown()
-        if cooldownConnection then
-            cooldownConnection:Disconnect()
-            cooldownConnection = nil
-        end
-    end
-
-
-    -- ✅ ฟังก์ชันกด E
-    local function pressE()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-        task.wait(0.05)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-    end
-
-    -- ✅ เตรียมมีด Butcher
-    local function prepareKnife()
-        local buyRemote = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("BuyItemEvent")
-        if buyRemote then
-            buyRemote:FireServer("Butcher knife")
-
-        end
-
-        local basket = LocalPlayer:WaitForChild("Backpack"):FindFirstChild("Butcher knife")
-        if basket and basket:IsA("Tool") then
-            basket.Parent = Character
-        end
-
-        local invRemote = ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("InventoryEvent")
-        if invRemote then
-            invRemote:FireServer("Use", "Butcher knife")
-
-        end
-    end
-
-    local stopRequested = false
-
-    -- ✅ ฟังก์ชันแปรรูป Meat ถ้ามีใน Inventory
-    local function checkAndProcessMeat()
-        local inventory = LocalPlayer:FindFirstChild("Inventory")
-        if inventory and inventory:FindFirstChild("Meat") and inventory.Meat.Value >= 1 then
-        
-
-            -- วาร์ปไปจุดแปรรูป
-            root.CFrame = CFrame.new(-1441, 17, -91)
-            task.wait(0.5)
-
-            local args = {
-                "Craft_Farm",
-                "Meat",
-                1
-            }
-            local craft = ReplicatedStorage:WaitForChild("Events"):WaitForChild("CraftEvent")
-            craft:FireServer(unpack(args))
-
-
-            task.wait(1)
-
-            -- กลับไปจุดฟาร์ม
-            root.CFrame = CFrame.new(-1432, 17, -157)
-        end
-    end
-
-    -- ✅ ลูปฟาร์มวัว
-    local function farmCowsOnce()
-        local cowFolder = workspace:WaitForChild("Plants"):WaitForChild("Cow")
-        local remote = cowFolder:WaitForChild("Script"):WaitForChild("RemoteEvent")
-
-        for _, cow in ipairs(cowFolder:GetChildren()) do
-            if stopRequested then
-                
-                return
-            end
-
-            -- 🔄 ตรวจสอบ Meat ก่อนทุกครั้ง
-            checkAndProcessMeat()
-
-            if cow:IsA("Model") and cow:FindFirstChild("Cube") then
-                local cube = cow.Cube
-                root.CFrame = cube.CFrame + Vector3.new(0, 5, 0)
-                task.wait(0.2)
-
-                pressE()
-
-                remote:FireServer(cube)
-            
-
-                task.wait(2)
-
-                local craft = ReplicatedStorage.Events:FindFirstChild("CraftEvent")
-                if craft then
-                    craft:FireServer("Craft_Farm", "Meat", 1)
-                    
-                end
-
-                local sell = ReplicatedStorage.Events:FindFirstChild("SellEvent")
-                if sell then
-                    sell:FireServer("Steak", 1)
-                
-                end
-
-                label.Text = "เงินเพิ่ม: +1 Steak"
-                label.Visible = true
-                task.wait(0.3)
-                label.Visible = false
-
-                task.wait(0.5)
-            end
-        end
-    end
-
-    -- ✅ Toggle UI ควบคุม
-    local running = false
-
-
-    FoodsAll:Section({Title = "🥩 ฟามเนื้อ"})
-    FoodsAll:Toggle({
-        Title = "ฟาม เนื้อวัว",
-        Desc = "",
-        Value = false,
-        Callback = function(state)
-            running = state
-            stopRequested = not state
-    
-
-            if running then
-                root.CFrame = CFrame.new(-1432, 17, -157)
-                prepareKnife()
-
-                task.spawn(function()
-                    while running do
-                        pcall(farmCowsOnce)
-                        task.wait(1)
-                    end
-                end)
-            end
-        end
-    })
-
-        
-
+   
 
     end
         Window:Line()
@@ -2630,334 +2031,299 @@ White:Toggle({
     Window:Line()
 
 
-    local Player = Window:Tab({Title = "Player", Icon = "user"}) do
-        Player:Section({Title = "Player Modifications"})
+-- 📂 Tab: Player Modifications
+local PlayerTab = Window:Tab({Title = "Player", Icon = "user"}) do
+PlayerTab:Section({Title = "Player Modifications"})
 
-        -- ตัวแปรเก็บสถานะ
-        local SpeedEnabled = false
-        local JumpEnabled = false
-        local NoclipEnabled = false
-        local InfiniteJumpEnabled = false
-        local FlyEnabled = false
-        local CurrentSpeed = 25
-        local CurrentJumpPower = 50
-    local Hunger = LocalPlayer:WaitForChild("Hunger")
+-- 🧩 ตัวแปรหลัก
+local player = game.Players.LocalPlayer
+local rs = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local InventoryEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("InventoryEvent")
 
-    local InventoryEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("InventoryEvent")
-        local uis = game:GetService("UserInputService")
-        local rs = game:GetService("RunService")
-        local player = game:GetService("Players").LocalPlayer
+local SpeedEnabled, NoclipEnabled, InfiniteJumpEnabled, FlyEnabled = false, false, false, false
+local CurrentSpeed = 25
+local flySpeed = 80
+local flying, bodyGyro, bodyVel
+local speedLoop, jumpConnection
+local Hunger = player:WaitForChild("Hunger")
 
-        -- ป้องกันการเชื่อม Event ซ้ำซ้อน
-        local jumpConnection
-        local flyConnection
-
-        -- ฟังก์ชันหลัก
-        local function applySpeed()
-            if SpeedEnabled then
-                local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    humanoid.WalkSpeed = CurrentSpeed
-                end
+-----------------------------------------------------
+-- 🏃 SPEED BOOST
+-----------------------------------------------------
+local function startLoopSpeed()
+    if speedLoop then speedLoop:Disconnect() end
+    speedLoop = rs.RenderStepped:Connect(function()
+        if SpeedEnabled and player.Character then
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.WalkSpeed ~= CurrentSpeed then
+                hum.WalkSpeed = CurrentSpeed
             end
-        end
-
-        local function applyJumpPower()
-            if JumpEnabled then
-                local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    humanoid.JumpPower = CurrentJumpPower
-                end
-            end
-        end
-
-        -- Noclip
-        local function noclipLoop()
-            while NoclipEnabled do
-                rs.Stepped:Wait()
-                if player.Character then
-                    for _, part in pairs(player.Character:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end
-        end
-    -- ตัวแปรเก็บ loop
-    local speedLoop
-
-    -- ฟังก์ชัน LoopSpeed
-    local function startLoopSpeed()
-        if speedLoop then speedLoop:Disconnect() end
-        speedLoop = rs.RenderStepped:Connect(function()
-            if SpeedEnabled then
-                local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-                if humanoid and humanoid.WalkSpeed ~= CurrentSpeed then
-                    humanoid.WalkSpeed = CurrentSpeed
-                end
-            end
-        end)
-    end
-
-    local function stopLoopSpeed()
-        if speedLoop then
-            speedLoop:Disconnect()
-            speedLoop = nil
-        end
-        -- รีเซ็ตความเร็วกลับเป็นปกติ
-        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then humanoid.WalkSpeed = 16 end
-    end
-
-        -- Reset when character respawns
-        local function setupCharacterReset()
-            player.CharacterAdded:Connect(function()
-                task.wait(1)
-                if SpeedEnabled then applySpeed() end
-                if JumpEnabled then applyJumpPower() end
-                if NoclipEnabled then coroutine.wrap(noclipLoop)() end
-                if FlyEnabled then startFly() end
-            end)
-        end
-        setupCharacterReset()
-
-        -- UI
-    -- ปรับ Toggle ให้เป็น LoopSpeed
-    Player:Toggle({
-        Title = "วิ่งไว",
-        Value = false,
-        Callback = function(v)
-            SpeedEnabled = v
-            if v then
-                startLoopSpeed()
-            else
-                stopLoopSpeed()
-            end
-        end
-    })
-
-    -- Slider ปรับความเร็ว
-    Player:Slider({
-        Title = "ปรับวิ่ง",
-        Min = 16,
-        Max = 250,
-        Value = 25,
-        Callback = function(val)
-            CurrentSpeed = val
-        end
-    })
-        Player:Toggle({
-            Title = "เดินทะลุ",
-            Value = false,
-            Callback = function(v)
-                NoclipEnabled = v
-                if v then coroutine.wrap(noclipLoop)() end
-            end
-        })
-
-        Player:Toggle({
-            Title = "กระโดดไม่จำกัด",
-            Value = false,
-            Callback = function(v)
-                InfiniteJumpEnabled = v
-                if v then infiniteJump()
-                elseif jumpConnection then jumpConnection:Disconnect() end
-            end
-        })
-
-
-
-    -- ⚙️ ค่าเริ่มต้น
-    local SelectedFood = "Hamburger"
-    local SelectedDrink = "Cola"
-    local autoEating = false
-
-    -- 🍔 Dropdown อาหาร
-    Player:Dropdown({
-        Title = "เลือกอาหาร",
-        List = {"Hamburger", "Hot dog", "Donut", "Icecream"},
-        Value = SelectedFood,
-        Callback = function(value)
-            SelectedFood = value
-        
-        end
-    })
-
-    -- 🥤 Dropdown เครื่องดื่ม
-    Player:Dropdown({
-        Title = "เลือกเครื่องดื่ม",
-        List = {"Cola", "Water", "coffee", "Smoothie"},
-        Value = SelectedDrink,
-        Callback = function(value)
-            SelectedDrink = value
-
-        end
-    })
-
-    -- 🔘 Toggle สำหรับออโต้กิน
-    Player:Toggle({
-        Title = "กดเปิด ออโต้กิน",
-        Desc = "จะกินเมื่อ Hunger < 50",
-        Value = autoEating,
-        Callback = function(isEnabled)
-            autoEating = isEnabled
-        
-
-            if isEnabled then
-                task.spawn(function()
-                    while autoEating do
-                        if Hunger.Value < 50 then
-                            -- ✅ กินอาหาร
-                            InventoryEvent:FireServer("Use", SelectedFood)
-                        
-                            task.wait(4)
-
-                            -- ✅ ดื่มน้ำ
-                            InventoryEvent:FireServer("Use", SelectedDrink)
-                            
-                            task.wait(4)
-                        else
-                    
-                            repeat
-                                task.wait(1)
-                            until Hunger.Value < 50 or not autoEating
-                        end
-                    end
-                end)
-            end
-        end
-    })
-    -- =========================================================
-    -- 🧭 วาร์ปไปหาผู้เล่น (Dropdown + ปุ่ม + Auto-Refresh 1 วิ)
-    -- =========================================================
-    local PlayersService = game:GetService("Players")
-
-    local SelectedTargetName = nil
-    local playerDropdown   -- จะเก็บอินสแตนซ์ของ Dropdown ไว้เพื่อ refresh
-    local lastHash = ""
-
-    -- รวบรวมรายชื่อผู้เล่น (ยกเว้นตัวเรา) + เรียง A->Z
-    local function getPlayerList()
-        local list = {}
-        for _, plr in ipairs(PlayersService:GetPlayers()) do
-            if plr ~= player then
-                table.insert(list, plr.Name)
-            end
-        end
-        table.sort(list)
-        if #list == 0 then
-            list = {"— ไม่มีผู้เล่นคนอื่น —"}
-        end
-        return list
-    end
-
-    -- แฮชง่าย ๆ เพื่อตรวจว่ารายชื่อเปลี่ยนจริงก่อนค่อยรีเฟรช
-    local function listHash(t)
-        return table.concat(t, "|")
-    end
-
-    -- พยายามรีเฟรช Dropdown ให้รองรับหลายไลบรารี (มี/ไม่มี :Refresh)
-    local function tryRefreshDropdown(newList)
-        if not playerDropdown then return end
-        local ok = false
-
-        -- ไล่พยายามทีละเมธอดที่พบบ่อยในหลาย UI libs
-        local tryMethods = {
-            function() return playerDropdown:Refresh(newList, true) end,
-            function() return playerDropdown:Set(newList) end,
-            function() return playerDropdown:SetOptions(newList) end,
-            function() return playerDropdown:SetList(newList) end,
-            function() return playerDropdown:Update(newList) end,
-            function() return playerDropdown:UpdateList(newList) end,
-        }
-
-        for _, f in ipairs(tryMethods) do
-            local s = pcall(f)
-            if s then ok = true break end
-        end
-
-        -- ถ้า lib ไม่มีเมธอดรีเฟรช ก็ข้าม (รายชื่อจะยังอัปเดต logic ภายใน แต่ UI อาจไม่เปลี่ยน)
-        if not ok then
-            -- คุณสามารถเปลี่ยนไปใช้วิธี recreate dropdown ตามไลบรารีของคุณได้ที่นี่ (ถ้าจำเป็น)
-            -- print("ℹ️ Dropdown library นี้ไม่รองรับ Refresh แบบไดนามิก")
-        end
-    end
-
-    -- ฟังก์ชันวาร์ป
-    local function teleportToPlayerByName(name)
-        if not name or name == "" or name == "— ไม่มีผู้เล่นคนอื่น —" then
-        
-            return
-        end
-
-        local target = PlayersService:FindFirstChild(name)
-        if not target then
-        
-            return
-        end
-
-        local myChar = player.Character or player.CharacterAdded:Wait()
-        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local tChar = target.Character
-        local tHRP  = tChar and tChar:FindFirstChild("HumanoidRootPart")
-
-        if not (myHRP and tHRP) then
-        
-            return
-        end
-
-        -- วาร์ปไปด้านหลังเป้าหมาย ~3 สตัด และยกขึ้นเล็กน้อยกันติด
-        local targetCF = tHRP.CFrame
-        local offset   = targetCF * CFrame.new(0, 1.5, 3) -- +Y กันติดหัว, +Z = ด้านหลัง
-        myHRP.CFrame  = offset
-
-        print(("✅ วาร์ปไปหา %s สำเร็จ"):format(name))
-    end
-
-    -- ===== UI: Dropdown + Button =====
-    playerDropdown = Player:Dropdown({
-        Title = "เลือกผู้เล่นที่จะวาร์ปหา",
-        List  = getPlayerList(),
-        Value = SelectedTargetName or "— ไม่มีผู้เล่นคนอื่น —",
-        Callback = function(v)
-            SelectedTargetName = (v == "— ไม่มีผู้เล่นคนอื่น —") and nil or v
-    
-        end
-    })
-
-    -- ⚡ ปุ่มวาร์ป
-    Player:Button({
-        Title = "วาร์ปไปหาผู้เล่นที่เลือก",
-        Callback = function()
-            teleportToPlayerByName(SelectedTargetName)
-        end
-    })
-
-    -- 🔄 อัปเดตรายชื่ออัตโนมัติทุก 1 วินาที
-    task.spawn(function()
-        while true do
-            local list = getPlayerList()
-            local h = listHash(list)
-            if h ~= lastHash then
-                lastHash = h
-                tryRefreshDropdown(list)
-                -- ถ้าคนที่เลือกไว้หลุดออก ให้เคลียร์เป้าหมาย
-                local stillExists = false
-                for _, n in ipairs(list) do
-                    if n == SelectedTargetName then stillExists = true break end
-                end
-                if not stillExists then
-                    SelectedTargetName = (#list > 0 and list[1] ~= "— ไม่มีผู้เล่นคนอื่น —") and list[1] or nil
-                end
-            end
-            task.wait(1)
         end
     end)
+end
 
+local function stopLoopSpeed()
+    if speedLoop then speedLoop:Disconnect() speedLoop = nil end
+    local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = 16 end
+end
+
+-----------------------------------------------------
+-- 🚫 NOCLIP
+-----------------------------------------------------
+local function noclipLoop()
+    while NoclipEnabled do
+        rs.Stepped:Wait()
+        local char = player.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
+        end
     end
+end
+
+-----------------------------------------------------
+-- 🛫 FLY SYSTEM
+-----------------------------------------------------
+local function setFlying(state)
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+
+    if state then
+        if flying then return end
+        flying = true
+
+        bodyGyro = Instance.new("BodyGyro")
+        bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        bodyGyro.P = 10000
+        bodyGyro.CFrame = hrp.CFrame
+        bodyGyro.Parent = hrp
+
+        bodyVel = Instance.new("BodyVelocity")
+        bodyVel.Velocity = Vector3.zero
+        bodyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyVel.Parent = hrp
+
+        task.spawn(function()
+            while flying and task.wait() do
+                local cam = workspace.CurrentCamera
+                local dir = Vector3.zero
+
+                if uis:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
+                if uis:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
+                if uis:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
+                if uis:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
+                if uis:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0, 1, 0) end
+                if uis:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.new(0, 1, 0) end
+
+                bodyGyro.CFrame = cam.CFrame
+                bodyVel.Velocity = dir * flySpeed
+            end
+        end)
+        print("✈️ เริ่มบินแล้ว (Speed:", flySpeed, ")")
+    else
+        flying = false
+        if bodyGyro then bodyGyro:Destroy() end
+        if bodyVel then bodyVel:Destroy() end
+        print("🛑 หยุดบินแล้ว")
+    end
+end
+
+-----------------------------------------------------
+-- 🧗 INFINITE JUMP
+-----------------------------------------------------
+local function infiniteJump()
+    if jumpConnection then jumpConnection:Disconnect() end
+    jumpConnection = uis.JumpRequest:Connect(function()
+        if InfiniteJumpEnabled then
+            local char = player.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then hum:ChangeState("Jumping") end
+        end
+    end)
+end
+
+-----------------------------------------------------
+-- 🍔 AUTO EAT
+-----------------------------------------------------
+local SelectedFood, SelectedDrink = "Hamburger", "Cola"
+local autoEating = false
+
+local function autoEatLoop()
+    while autoEating do
+        if Hunger.Value < 50 then
+            InventoryEvent:FireServer("Use", SelectedFood)
+            task.wait(4)
+            InventoryEvent:FireServer("Use", SelectedDrink)
+            task.wait(4)
+        else
+            repeat task.wait(1) until Hunger.Value < 50 or not autoEating
+        end
+    end
+end
+
+-----------------------------------------------------
+-- 🧭 TELEPORT TO PLAYER
+-----------------------------------------------------
+local PlayersService = game:GetService("Players")
+local SelectedTargetName, playerDropdown
+local lastHash = ""
+
+local function getPlayerList()
+    local list = {}
+    for _, plr in ipairs(PlayersService:GetPlayers()) do
+        if plr ~= player then table.insert(list, plr.Name) end
+    end
+    table.sort(list)
+    return #list > 0 and list or {"— ไม่มีผู้เล่นคนอื่น —"}
+end
+
+local function listHash(t)
+    return table.concat(t, "|")
+end
+
+local function tryRefreshDropdown(newList)
+    if not playerDropdown then return end
+    local ok = false
+    for _, f in ipairs({
+        function() return playerDropdown:Refresh(newList, true) end,
+        function() return playerDropdown:Set(newList) end,
+        function() return playerDropdown:SetOptions(newList) end,
+        function() return playerDropdown:SetList(newList) end,
+        function() return playerDropdown:Update(newList) end,
+        function() return playerDropdown:UpdateList(newList) end,
+    }) do
+        local s = pcall(f)
+        if s then ok = true break end
+    end
+end
+
+local function teleportToPlayerByName(name)
+    if not name or name == "" or name == "— ไม่มีผู้เล่นคนอื่น —" then return end
+    local target = PlayersService:FindFirstChild(name)
+    if not target then return end
+    local myChar = player.Character or player.CharacterAdded:Wait()
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    local tChar = target.Character
+    local tHRP = tChar and tChar:FindFirstChild("HumanoidRootPart")
+    if myHRP and tHRP then
+        myHRP.CFrame = tHRP.CFrame * CFrame.new(0, 1.5, 3)
+        print(("✅ วาร์ปไปหา %s สำเร็จ"):format(name))
+    end
+end
+
+-----------------------------------------------------
+-- 🧍 UI ELEMENTS
+-----------------------------------------------------
+
+-- 🏃 Speed
+PlayerTab:Toggle({
+    Title = "วิ่งไว",
+    Value = false,
+    Callback = function(v)
+        SpeedEnabled = v
+        if v then startLoopSpeed() else stopLoopSpeed() end
+    end
+})
+PlayerTab:Slider({
+    Title = "ปรับความเร็ว",
+    Min = 16, Max = 250, Value = 25,
+    Callback = function(v) CurrentSpeed = v end
+})
+
+-- 🚫 Noclip
+PlayerTab:Toggle({
+    Title = "เดินทะลุ",
+    Value = false,
+    Callback = function(v)
+        NoclipEnabled = v
+        if v then coroutine.wrap(noclipLoop)() end
+    end
+})
+
+-- 🧗 Infinite Jump
+PlayerTab:Toggle({
+    Title = "กระโดดไม่จำกัด",
+    Value = false,
+    Callback = function(v)
+        InfiniteJumpEnabled = v
+        if v then infiniteJump()
+        elseif jumpConnection then jumpConnection:Disconnect() end
+    end
+})
+
+-- ✈️ Fly
+PlayerTab:Toggle({
+    Title = "บิน",
+    Desc = "เปิดเพื่อบิน (WASD / Space / Ctrl)",
+    Value = false,
+    Callback = function(v)
+        FlyEnabled = v
+        setFlying(v)
+    end
+})
+PlayerTab:Slider({
+    Title = "ปรับความเร็วบิน",
+    Min = 10, Max = 300, Default = 100,
+    Callback = function(val)
+        flySpeed = val
+        if flying then print("✈️ ปรับความเร็วบินเป็น:", val) end
+    end
+})
+
+-- 🍔 Auto Eat
+PlayerTab:Dropdown({
+    Title = "เลือกอาหาร",
+    List = {"Hamburger", "Hot dog", "Donut", "Icecream"},
+    Value = SelectedFood,
+    Callback = function(v) SelectedFood = v end
+})
+PlayerTab:Dropdown({
+    Title = "เลือกเครื่องดื่ม",
+    List = {"Cola", "Water", "Coffee", "Smoothie"},
+    Value = SelectedDrink,
+    Callback = function(v) SelectedDrink = v end
+})
+PlayerTab:Toggle({
+    Title = "ออโต้กินเมื่อหิว < 50",
+    Value = false,
+    Callback = function(v)
+        autoEating = v
+        if v then task.spawn(autoEatLoop) end
+    end
+})
+
+-- 🧭 Warp to Player
+playerDropdown = PlayerTab:Dropdown({
+    Title = "เลือกผู้เล่นที่จะวาร์ปหา",
+    List = getPlayerList(),
+    Value = "— ไม่มีผู้เล่นคนอื่น —",
+    Callback = function(v)
+        SelectedTargetName = (v == "— ไม่มีผู้เล่นคนอื่น —") and nil or v
+    end
+})
+PlayerTab:Button({
+    Title = "วาร์ปไปหาผู้เล่นที่เลือก",
+    Callback = function() teleportToPlayerByName(SelectedTargetName) end
+})
+
+-- 🔄 อัปเดตชื่อผู้เล่นทุก 1 วิ
+task.spawn(function()
+    while task.wait(1) do
+        local list = getPlayerList()
+        local h = listHash(list)
+        if h ~= lastHash then
+            lastHash = h
+            tryRefreshDropdown(list)
+        end
+    end
+end)
 
 
+end
 
     Window:Line()
     -- === Aimbot (Head Lock) + Auto-Reload ===
@@ -2965,9 +2331,13 @@ White:Toggle({
     local RunService = game:GetService("RunService")
     local UserInputService = game:GetService("UserInputService")
     local LocalPlayer = Players.LocalPlayer
-
+local shotESP = {} -- shotESP[player] = {gui = BillboardGui, conn = connection, removeTimer = task}
     local Aimbot = Window:Tab({Title = "ล็อคเป้า", Icon = "user"}) do
         Aimbot:Section({Title = "โหมดล็อคหัวออโต้"})
+
+
+
+
 
         -- ================= Base Settings =================
         local AimbotSettings = { Enabled = false, Range = 50 }
@@ -3182,6 +2552,183 @@ White:Toggle({
                 end
             end)
         end
+
+-- >>> เพิ่มตัวช่วย / ตารางเก็บสถานะ ESP
+local shotESP = {} -- shotESP[player] = {gui = BillboardGui, conn = connection, removeTimer = task}
+
+local function createHeadESP(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return nil end
+    local head = targetPlayer.Character:FindFirstChild("Head")
+    if not head then return nil end
+
+    -- ถ้ามีแล้ว return ของเดิม
+    if shotESP[targetPlayer] and shotESP[targetPlayer].gui and shotESP[targetPlayer].gui.Parent then
+        return shotESP[targetPlayer].gui
+    end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "AimbotShotESP"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 120, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 1.6, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = head
+
+    local frame = Instance.new("Frame", billboard)
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 0.35
+    frame.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    frame.BorderSizePixel = 0
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.Position = UDim2.new(0.5, 0, 0.5, 0)
+
+    local txt = Instance.new("TextLabel", frame)
+    txt.Size = UDim2.new(1, -6, 1, -6)
+    txt.Position = UDim2.new(0, 3, 0, 3)
+    txt.Text = "SHOT"
+    txt.TextScaled = true
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.new(1,1,1)
+    txt.Font = Enum.Font.GothamBold
+
+    return billboard
+end
+
+local function removeESPForPlayer(plr)
+    local info = shotESP[plr]
+    if not info then return end
+    if info.conn then
+        pcall(function() info.conn:Disconnect() end)
+        info.conn = nil
+    end
+    if info.removeTimer then
+        pcall(task.cancel, info.removeTimer)
+        info.removeTimer = nil
+    end
+    if info.gui and info.gui.Parent then
+        pcall(function() info.gui:Destroy() end)
+    end
+    shotESP[plr] = nil
+end
+
+-- เก็บ/รีเซ็ต timer หลังโดนจริง (จะลบ ESP ถ้าไม่มีการโดนซ้ำนาน 5 วินาที)
+local function scheduleRemoveAfter(plr, seconds)
+    if not plr then return end
+    if not shotESP[plr] then return end
+    if shotESP[plr].removeTimer then
+        pcall(task.cancel, shotESP[plr].removeTimer)
+        shotESP[plr].removeTimer = nil
+    end
+    local t = task.defer(function()
+        task.wait(seconds)
+        removeESPForPlayer(plr)
+    end)
+    shotESP[plr].removeTimer = t
+end
+
+-- ถ้ผู้เล่นรีสพอร์ท/ออก ให้ลบ ESP
+Players.PlayerRemoving:Connect(function(plr)
+    removeESPForPlayer(plr)
+end)
+-- ถ้า Character หาย/รีสพอร์ท
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterRemoving:Connect(function() removeESPForPlayer(plr) end)
+end)
+
+
+-- >>> แทนที่ฟังก์ชัน shootHead เดิมด้วยเวอร์ชันนี้
+local function shootHead(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    local head = targetPlayer.Character:FindFirstChild("Head")
+    local hum  = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not head or not hum or hum.Health <= 0 then return false end
+
+    local tool, remote = getWeaponAndRemote()
+    -- (getWeaponAndRemote อาจคืน (tool, remote) หรือ nils)
+    if not remote then return false end
+
+    -- สร้าง ESP ทันทีเมื่อยิง
+    local gui = createHeadESP(targetPlayer)
+    -- เก็บข้อมูลเริ่มต้น
+    local initialHealth = hum.Health
+
+    -- ถ้ายังไม่มี entry ให้สร้าง
+    if not shotESP[targetPlayer] then
+        shotESP[targetPlayer] = { gui = gui, conn = nil, removeTimer = nil, lastHealth = initialHealth }
+    else
+        shotESP[targetPlayer].gui = gui
+        shotESP[targetPlayer].lastHealth = initialHealth
+    end
+
+    -- ส่งคำสั่งยิง
+    local ok, err = pcall(function()
+        -- บาง remote ต้องการตำแหน่ง; บางอันอาจต้องการรูปแบบอื่น แต่เดิมโค้ดส่ง head.Position
+        remote:FireServer(head.Position)
+    end)
+    if not ok then
+        warn("[Aimbot] FireServer failed:", err)
+        -- ลบ ESP ถ้า remote ล้มเหลว
+        removeESPForPlayer(targetPlayer)
+        return false
+    end
+
+    -- เชื่อมต่อเพื่อตรวจ Health Changed (ถ้ายังไม่มี)
+    if shotESP[targetPlayer] and not shotESP[targetPlayer].conn then
+        local conn
+        conn = hum:GetPropertyChangedSignal("Health"):Connect(function()
+            local newH = hum.Health
+            local info = shotESP[targetPlayer]
+            if not info then
+                if conn then pcall(function() conn:Disconnect() end) end
+                return
+            end
+
+            -- ถ้าเลือดลดจากค่า lastHealth => ถือว่าโดนจริง
+            if newH < (info.lastHealth or initialHealth) then
+                info.lastHealth = newH
+                -- ให้ ESP คงอยู่อีกสักพัก ถ้าไม่มีโดนซ้ำจะหายเองภายหลัง
+                scheduleRemoveAfter(targetPlayer, 5) -- เก็บไว้ 5 วินาทีหลังการโดนครั้งสุดท้าย
+            else
+                -- ถ้า health เพิ่มขึ้น (heal) ให้อัพ lastHealth ด้วย
+                info.lastHealth = newH
+            end
+
+            -- ถ้าตาย ให้ลบ ESP ทันที
+            if newH <= 0 then
+                removeESPForPlayer(targetPlayer)
+                if conn then pcall(function() conn:Disconnect() end) end
+            end
+        end)
+        shotESP[targetPlayer].conn = conn
+    end
+
+    -- ถ้าไม่มีการลดเลือดภายในช่วงสั้น ๆ (แปลว่า remote อาจไม่ทำดาเมจจริง) -> ลบ ESP
+    -- หน่วงสั้น ๆ เพื่อตรวจว่า health ลดจริงหรือไม่
+    task.delay(0.7, function()
+        -- ถา้ entry ถูกลบไปแล้ว ก็จบ
+        local info = shotESP[targetPlayer]
+        if not info then return end
+        local humNow = targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        local nowHealth = humNow and humNow.Health or nil
+        if nowHealth == nil then
+            removeESPForPlayer(targetPlayer)
+            return
+        end
+        -- ถ้ายังเท่ากับ initialHealth (ไม่มีดาเมจ) -> ลบ
+        if nowHealth >= (initialHealth or 0) then
+            -- ไม่มีการลดเลือดภายใน 0.7 วินาที -> เอา ESP ออก
+            removeESPForPlayer(targetPlayer)
+        else
+            -- มีการลด -> schedule ให้ลบหลัง 5 วินาทีถ้าไม่มีโดนซ้ำ
+            scheduleRemoveAfter(targetPlayer, 5)
+        end
+    end)
+
+    return true
+end
+
+
+
         local function stopAutoReload()
             if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
         end
@@ -3248,14 +2795,68 @@ White:Toggle({
 
 
 
-        local settings = Window:Tab({Title = "ตั้งค่า", Icon = "settings"}) do
-        Settings:Section({Title = ""})
+    -- 🔧 Settings Tab
+local settings = Window:Tab({Title = "ตั้งค่า", Icon = "settings"}) do
+    settings:Section({Title = "ปรับภาพลื่น"})
 
+    settings:Button({
+        Title = "Boost FPS",
+        Desc = "",
+        Callback = function()
+            local lighting = game:GetService("Lighting")
+            local terrain = workspace:FindFirstChildOfClass("Terrain")
 
+            -- 🌤️ ปิด PostEffect ต่าง ๆ
+            for _, v in pairs(lighting:GetChildren()) do
+                if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("BloomEffect")
+                or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") then
+                    v.Enabled = false
+                end
+            end
 
-        
-    end
-        Window:Line()
+            -- 🌫️ ลดรายละเอียด Terrain
+            if terrain then
+                terrain.WaterWaveSize = 0
+                terrain.WaterWaveSpeed = 0
+                terrain.WaterReflectance = 0
+                terrain.WaterTransparency = 1
+            end
+
+            -- 💡 ปิดแสงและอนุภาคทั้งหมด
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Light") then
+                    obj.Enabled = false
+                elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke")
+                    or obj:IsA("Fire") or obj:IsA("Sparkles") or obj:IsA("Beam") then
+                    obj.Enabled = false
+                end
+            end
+
+            -- 🔲 ลดคุณภาพวัตถุ
+            for _, part in ipairs(workspace:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Material = Enum.Material.SmoothPlastic
+                    part.Reflectance = 0
+                    part.CastShadow = false
+                end
+            end
+
+            -- ⚙️ ลด Quality Level
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+
+            -- 🎯 จำกัด FPS
+            if setfpscap then setfpscap(120) end
+
+            Window:Notify({
+                Title = "✅ Boost FPS เสร็จสิ้น",
+                Desc = "ระบบได้ปิดเอฟเฟกต์ทั้งหมดเพื่อเพิ่มประสิทธิภาพแล้ว",
+                Time = 3
+            })
+        end
+    })
+end
+
+ Window:Line()
 
     -- 🔔 Final Notification
     Window:Notify({
@@ -3264,40 +2865,33 @@ White:Toggle({
         Time = 4,
     })
 
+-- ✅ ปิด Animation ต้องห้าม (ตัวที่รันแล้วค้าง)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
+-- 🧩 Animation ID ที่คุณต้องการบล็อก
+local blockedAnimations = {
+    ["rbxassetid://85841422982794"] = true
+}
 
-    --  ปิด  Animations เก็
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
+-- 🧩 เมื่อเล่น Animation ใด ๆ
+local function onAnimationPlayed(animTrack)
+    local anim = animTrack.Animation
+    local id = anim.AnimationId
+    local name = anim.Name or "Unknown"
 
-    -- Animation ID ที่คุณต้องการบล็อก
-    local blockedAnimations = {
-        ["rbxassetid://85841422982794"] = true
-    }
-
-    -- เมื่อเล่น Animation
-    local function onAnimationPlayed(animTrack)
-        local anim = animTrack.Animation
-        local id = anim.AnimationId
-        local name = anim.Name or "Unknown"
-
-
-
-        if blockedAnimations[id] then
-            warn("🚫 Blocked animation detected! Stopping:", id)
-            animTrack:Stop()
-            -- หรือ destroy ถ้าต้องการลบทิ้ง:
-            -- animTrack:Destroy()
-        end
+    if blockedAnimations[id] then
+        warn("🚫 Blocked animation detected! Stopping:", id)
+        animTrack:Stop()
     end
+end
 
-    -- Hook กับ Humanoid ของตัวละคร
-    local function hookAnimations()
-        local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        local hum = char:WaitForChild("Humanoid")
+-- 🧩 Hook เข้ากับ Humanoid
+local function hookAnimations()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local hum = char:WaitForChild("Humanoid")
+    hum.AnimationPlayed:Connect(onAnimationPlayed)
+    print("✅ Animation hook activated")
+end
 
-        hum.AnimationPlayed:Connect(onAnimationPlayed)
-        print("✅ Animation hook activated")
-    end
-
-    hookAnimations()
+hookAnimations() -- 🔥 เรียกใช้ฟังก์ชันจริง ๆ
